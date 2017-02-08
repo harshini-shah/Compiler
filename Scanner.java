@@ -20,7 +20,6 @@ public class Scanner {
     
     public void next() {
     	if(_fr.sym != Token.eofToken){
-    		boolean comment = false;
     		while(Character.isWhitespace(_fr.sym)){
     			_fr.next();
     		}
@@ -41,8 +40,8 @@ public class Scanner {
 		    			}else if(_fr.sym == '<' && _fr.lookAhead() == '-'){
 		    				sym = Token.becomesToken;
 		    				_fr.next();
-		    			} else if (_fr.lookAhead() == ' ') {
-		    			    sym = tokenTable.get(Character.toString(_fr.sym));
+		    			} else if (_fr.sym == '<' || _fr.sym == '>') {
+		    			    sym = tokenTable.get(String.valueOf(_fr.sym));
 		    			}
 		    			break;
 		    		}
@@ -54,8 +53,7 @@ public class Scanner {
 		    		}
 	    		}
 	    	}
-	    	if(!comment)
-	    		_fr.next();
+	    	_fr.next();
     	}else{
     		sym = Token.eofToken;
     	}
