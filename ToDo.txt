@@ -1,0 +1,2 @@
+Take care of comments 
+Check scanner - the spaces solution won't work
