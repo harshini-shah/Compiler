@@ -2,51 +2,105 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Scanner {
-    private static final char SEPARATOR = ' ';
-    private static final char NEWLINE = '\n';
     public int sym;
     public int val;
     public int id;
     private FileReader _fr;
-    private boolean _getNext;
-    private int _nextSym;
-    private static int symbolCount;
+    private static int _symbolCount;
     Map<String, Integer> tokenTable;
     Map<String, Integer> symbolTable;
     
     public Scanner(String fileName) {
         _fr = new FileReader(fileName);
         _fr.next();
-        _getNext = true;
         tokenTable = new HashMap<String, Integer>();
         symbolTable = new HashMap<String, Integer>();
         populateTokenTable();
-        
     }
     
     public void next() {
-        if (_getNext) {
-            StringBuilder token = new StringBuilder();
-            while(_getNext && _fr.sym != SEPARATOR && _fr.sym != NEWLINE && _fr.sym != Token.eofToken){
-                if (_fr.sym == ';') {
-                    _getNext = false;
-                    _nextSym = 70;
-                } else if (_fr.sym == ',') {
-                    _getNext = false;
-                    _nextSym = 31;
-                } else {
-                    token.append(_fr.sym);
-                    _fr.next();
-                } 
-            }
-            if(_fr.sym == Token.eofToken){
-                sym = Token.eofToken;
-            }else{
-                setParameters(token.toString());
-            }
-            // set the sym, val and id using the token class results
-        } else {
-            sym = _nextSym;
+    	if(_fr.sym != Token.eofToken){
+    		boolean comment = false;
+    		while(Character.isWhitespace(_fr.sym)){
+    			_fr.next();
+    		}
+	    	if(Character.isLetter(_fr.sym)){
+	    		generateIdentifier();
+	    	}else if(Character.isDigit(_fr.sym)){
+	    		val = getNumber();
+	    		sym = Token.numberToken;
+	    	}else{
+	    		switch(_fr.sym){
+		    		case '=':
+		    		case '!':
+		    		case '>':
+		    		case '<':{
+		    			if(_fr.lookAhead() == '='){
+		    				sym = tokenTable.get(_fr.sym+"=");
+	    					_fr.next();
+		    			}else if(_fr.sym == '<' && _fr.lookAhead() == '-'){
+		    				sym = Token.becomesToken;
+		    				_fr.next();
+		    			}
+		    			break;
+		    		}
+		    		case '/':{
+		    			if(_fr.lookAhead() == '/'){
+		    				_fr.next(true);
+		    				next();
+		    				comment = true;
+		    			}else{
+		    				sym = Token.divToken;
+		    			}
+		    			break;
+		    		}
+		    		default:{
+		    			if(tokenTable.containsKey(String.valueOf(_fr.sym))){
+		    		          sym = tokenTable.get(String.valueOf(_fr.sym));
+		    		    }
+		    			break;
+		    		}
+	    		}
+	    	}
+	    	if(!comment)
+	    		_fr.next();
+    	}else{
+    		sym = Token.eofToken;
+    	}
+    }
+    
+    private int getNumber() {  
+        int rslt = 0;  
+        boolean done = false;
+        while (Character.isDigit(_fr.sym) && !done){  
+	        rslt = rslt * 10 + Character.digit(_fr.sym, 10);  
+	        if(Character.isDigit(_fr.lookAhead())){
+	        	_fr.next();
+	        }else{
+	        	done = true;
+	        }
+        }  
+        return rslt;  
+    }
+    
+    private void generateIdentifier(){
+    	boolean done = false;
+    	StringBuilder token = new StringBuilder();
+    	while(Character.isLetterOrDigit(_fr.sym) && !done){
+    		token.append(_fr.sym);
+    		if(Character.isLetterOrDigit(_fr.lookAhead())){
+    			_fr.next();
+    		}else{
+    			done = true;
+    		}
+    	}
+    	String tok = token.toString();
+    	if(tokenTable.containsKey(tok)){
+            sym = tokenTable.get(tok);
+        }else{
+            sym = 61;
+            id = _symbolCount++;
+            symbolTable.put(tok, id);
         }
     }
     
@@ -92,17 +146,4 @@ public class Scanner {
         tokenTable.put("main", 200);
         tokenTable.put("endOfFile", 255);
     }
-    
-    private void setParameters(String token) {
-      if(tokenTable.containsKey(token)){
-          sym = tokenTable.get(token);
-      }else if(Character.isDigit(token.charAt(0))){
-          sym = 60;
-          val = Integer.parseInt(token);
-      }else{
-          sym = 61;
-          id = symbolCount++;
-          symbolTable.put(token, id);
-      }
-    } 
 }

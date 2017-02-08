@@ -1,8 +1,8 @@
 
 public class Parser {
     private Scanner scanner;
-    public Parser(){
-        
+    public Parser(String fileName){
+        scanner = new Scanner(fileName);
     }
     
     private void computation(){
@@ -258,14 +258,14 @@ public class Parser {
         if(scanner.sym == Token.callToken){
             scanner.next();
             ident();
-            if(scanner.sym == Token.openParan){
+            if(scanner.sym == Token.openparanToken){
                 scanner.next();
                 expression();
                 while(scanner.sym == Token.commaToken){
                     scanner.next();
                     expression();
                 }
-                if(scanner.sym == Token.closeParan){
+                if(scanner.sym == Token.closeparanToken){
                     scanner.next();
                 }else{
                     error("function call missing closing paran");
