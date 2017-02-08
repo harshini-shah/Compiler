@@ -21,9 +21,16 @@ public class FileReader {
     }
     
     public void next(boolean ignoreLine) {
-    	if(ignoreLine || _index >= _line.length()){
+        //System.out.println(_line == null);
+    	while (_line != null && (ignoreLine || _index >= _line.length())){
     		if(_sc.hasNextLine()){
 	        	_line = _sc.nextLine().trim();
+	        	ignoreLine = false;
+	        	if (_line.length() >= 2 && _line.charAt(0) == '/' && _line.charAt(1) == '/') {
+	        	    ignoreLine = true;
+	        	} else if (_line.length() >= 1 && _line.charAt(0) == '#') {
+	        	    ignoreLine = true;
+	        	}
 	        	_index = 0;
 	        }else{
 	            _line = null;

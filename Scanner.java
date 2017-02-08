@@ -36,21 +36,13 @@ public class Scanner {
 		    		case '>':
 		    		case '<':{
 		    			if(_fr.lookAhead() == '='){
-		    				sym = tokenTable.get(_fr.sym+"=");
+		    				sym = tokenTable.get(_fr.sym + "=");
 	    					_fr.next();
 		    			}else if(_fr.sym == '<' && _fr.lookAhead() == '-'){
 		    				sym = Token.becomesToken;
 		    				_fr.next();
-		    			}
-		    			break;
-		    		}
-		    		case '/':{
-		    			if(_fr.lookAhead() == '/'){
-		    				_fr.next(true);
-		    				next();
-		    				comment = true;
-		    			}else{
-		    				sym = Token.divToken;
+		    			} else if (_fr.lookAhead() == ' ') {
+		    			    sym = tokenTable.get(Character.toString(_fr.sym));
 		    			}
 		    			break;
 		    		}
