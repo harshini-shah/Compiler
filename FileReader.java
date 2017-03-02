@@ -4,8 +4,8 @@ import java.util.Scanner;
 
 public class FileReader {
     private Scanner _sc;
-    private String _line="";
-    private int _index=0;
+    private String _line = "";
+    private int _index = 0;
     
     public char sym;
     public FileReader(String fileName) {
