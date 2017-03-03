@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -12,7 +13,7 @@ public class Parser {
     private Map<Integer, Integer> negatedBranchOp;
     private static int _lineNum = 1;
     public static Map<Integer, Identifier> symbolTable;
-    BasicBlock firstBlock;
+    List<CFG> functionBlocks;
     
     public Parser(String fileName){
         scanner = new Scanner(fileName);
@@ -20,9 +21,11 @@ public class Parser {
         opCode = new HashMap<Integer, String>();
         negatedBranchOp = new HashMap<Integer, Integer>();
         symbolTable = new HashMap<Integer, Identifier>();
-        firstBlock = new BasicBlock();
+        CFG mainFunction = new CFG();
+        functionBlocks = new LinkedList<CFG>();
+        functionBlocks.add(mainFunction);
         populateOpCodes();
-        computation(firstBlock);
+        computation(mainFunction.startBlock);
     }
     
     private void populateOpCodes(){
@@ -68,14 +71,14 @@ public class Parser {
             if(scanner.sym == Token.mainToken){
                 scanner.next();
                 while(scanner.sym == Token.varToken || scanner.sym == Token.arrToken){
-                    varDecl();
+                    varDecl(currBlock);
                 }
                 while(scanner.sym == Token.funcToken || scanner.sym == Token.procToken){
-                    funcDecl();
+                    funcDecl(currBlock);
                 }
                 if(scanner.sym == Token.beginToken){
                     scanner.next();
-                    statSequence();
+                    currBlock = statSequence(currBlock);
                     if(scanner.sym == Token.endToken){
                         scanner.next();
                         if(scanner.sym != Token.periodToken){
@@ -97,23 +100,42 @@ public class Parser {
         instr.operation = "EOF";
         currBlock.instructions.put(_lineNum, instr);
         
+        for (CFG cfg : functionBlocks) {
+            VisualizeCFG test = new VisualizeCFG(cfg.startBlock);
+        }
+        
 //        int count = 1;
 //        for (Instruction i : instructions.values()) {
 //            System.out.println(count++ + "\t" + i.toString());
 //        }
     }
     
-    private void varDecl(){
+    private void varDecl(BasicBlock currBlock){
         Identifier ident = typeDecl();
         if(scanner.sym == Token.identToken){
             Result x = ident();
             ident.name = x.name;
+            List<Integer> list = new ArrayList<Integer>();
+            list.add(_lineNum);
+            currBlock.variables.put(x.name, list);
+            Result dummy1 = new Result();
+            dummy1.kind = Kind.CONST;
+            dummy1.value = 0;
+            Compute(currBlock, Token.becomesToken, dummy1, x);
             symbolTable.put(symbolTable.size(), ident);
             
             while(scanner.sym == Token.commaToken){
                 scanner.next();
                 x = ident();
                 Identifier ident2 = new Identifier(ident);
+                Result dummy2 = new Result();
+                dummy2.kind = Kind.CONST;
+                dummy2.value = 0;
+                List<Integer> list2 = new ArrayList<Integer>();
+                list2.add(_lineNum);
+                currBlock.variables.put(x.name, list2);
+                Compute(currBlock, Token.becomesToken, dummy2, x);
+
                 symbolTable.put(symbolTable.size(), ident2);
             }
             if(scanner.sym == Token.semiToken){
@@ -163,7 +185,7 @@ public class Parser {
         return ident;
     }
     
-    private void funcDecl() {
+    private void funcDecl(BasicBlock currBlock) {
         if (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
             scanner.next();
             ident();
@@ -173,7 +195,7 @@ public class Parser {
             } else {
                 error("No ; after formal paramater in function ");
             }
-            funcBody();
+            funcBody(currBlock);
             if (scanner.sym == Token.semiToken) {
                 scanner.next();
             } else {
@@ -202,14 +224,14 @@ public class Parser {
         }
     }
     
-    private void funcBody() {
+    private void funcBody(BasicBlock currBlock) {
         if (scanner.sym == Token.varToken || scanner.sym == Token.arrToken) {
-            varDecl();
+            varDecl(currBlock);
         }
         
         if (scanner.sym == Token.beginToken) {
             scanner.next();
-            statSequence();
+            statSequence(currBlock);
             if (scanner.sym == Token.endToken) {
                 scanner.next();
             } else {
@@ -220,37 +242,39 @@ public class Parser {
         }
     }
     
-    private void statSequence() {
-        statement();
+    private BasicBlock statSequence(BasicBlock currBlock) {
+        currBlock = statement(currBlock);
         while (scanner.sym == Token.semiToken) {
             scanner.next();
-            statement();
+            currBlock = statement(currBlock);
         }
+        
+        return currBlock;
     }
     
-    private void statement(){
+    private BasicBlock statement(BasicBlock currBlock){
         if (scanner.sym == Token.letToken){
-            assignment();
+            assignment(currBlock);
         } else if (scanner.sym == Token.callToken){
-            funcCall();
+            funcCall(currBlock);
         } else if (scanner.sym == Token.ifToken){
-            ifStatement();
+            currBlock = ifStatement(currBlock);
         } else if (scanner.sym == Token.whileToken){
-            whileStatement();
+            currBlock = whileStatement(currBlock);
         } else if (scanner.sym == Token.returnToken){
-            returnStatement();
-        } else {
-            return;
+            returnStatement(currBlock);
         }
+        
+        return currBlock;
     }
 
     private void assignment(BasicBlock currBlock){
         if(scanner.sym == Token.letToken){
             scanner.next();
-            Result x = designator();
+            Result x = designator(currBlock);
             if(scanner.sym == Token.becomesToken){
                 scanner.next();
-                Result y = expression();
+                Result y = expression(currBlock);
                 if (currBlock.variables.containsKey(x.name)) {
                     currBlock.variables.get(x.name).add(_lineNum);
                 } else {
@@ -259,6 +283,7 @@ public class Parser {
                     currBlock.variables.put(x.name, lineNumbers);
                 }
                 Compute(currBlock, Token.becomesToken, y, x);
+
             }else{
                 error("Assignment: designator must be followed by <-");
             }
@@ -266,24 +291,49 @@ public class Parser {
             error("Error in assignment");
         }
     }
-
-    private void funcCall(){
+    
+    private boolean isPredefinedFunction(Result x) {
+        return x.name.equals("OutputNum") || x.name.equals("InputNum") || x.name.equals("OutputNewLine");
+    }
+    
+    private void generateFunctionCall(BasicBlock currBlock, Result x, Result y) {
+        if (x.name.equals("OutputNum")) {
+            Instruction instr = new Instruction();
+            instr.operation = "WRITE";
+            instr.op1 = y;
+            currBlock.instructions.put(_lineNum++, instr);
+        } else if (x.name.equals("InputNum")) {
+            Instruction instr = new Instruction();
+            instr.operation = "READ";
+            currBlock.instructions.put(_lineNum++, instr);
+        } else if (x.name.equals("OutputNewLine")) {
+            Instruction instr = new Instruction();
+            instr.operation = "WRITE NEW LINE";
+            currBlock.instructions.put(_lineNum++, instr);
+        }
+        return;
+    }
+    
+    private void funcCall(BasicBlock currBlock){
         if(scanner.sym == Token.callToken){
             scanner.next();
-            ident();
+            Result x = ident();
             if(scanner.sym == Token.openparanToken){
                 scanner.next();
-                expression();
-                while(scanner.sym == Token.commaToken){
-                    scanner.next();
-                    expression();
+                Result y = expression(currBlock);
+                if (isPredefinedFunction(x)) {
+                    generateFunctionCall(currBlock, x, y);
                 }
-                if(scanner.sym == Token.closeparanToken){
+                while(scanner.sym == Token.commaToken) {
                     scanner.next();
-                }else{
+                    expression(currBlock);
+                }
+                if(scanner.sym == Token.closeparanToken) {
+                    scanner.next();
+                } else {
                     error("function call missing closing paran");
                 }
-            }else{
+            } else {
                 error("function call missing open paran");
             }
         }else{
@@ -291,64 +341,194 @@ public class Parser {
         }
     }
     
-    private void ifStatement(){
+    private void copyVariables(BasicBlock block1, BasicBlock block2) {
+        for (String str : block1.variables.keySet()) {
+            block2.variables.put(str, new ArrayList<Integer>(block1.variables.get(str)));
+        }
+    }
+    
+    private BasicBlock ifStatement(BasicBlock currBlock){
+        BasicBlock joinBlock = new BasicBlock();
+        joinBlock.kind = BasicBlock.Kind.JOIN;
+
+        currBlock.joinBlock = joinBlock;
+        copyVariables(currBlock, joinBlock);
+        
         if(scanner.sym == Token.ifToken){
             Result follow = new Result();
             follow.fixupLocation = 0;
             scanner.next();
-            Result x = relation();
-            CondNegBraFwd(x);
+            Result x = relation(currBlock);
+            CondNegBraFwd(currBlock, x);
+            
             if(scanner.sym == Token.thenToken){
                 scanner.next();
-                statSequence();
+
+                BasicBlock ifBlock = new BasicBlock();
+                ifBlock.kind = BasicBlock.Kind.IF;
+                currBlock.leftBlock = ifBlock;
+                copyVariables(currBlock, ifBlock);
+                
+                ifBlock = statSequence(ifBlock);
+
+                
                 if(scanner.sym == Token.elseToken){
                     scanner.next();
-                    UnCondBraFwd(follow);
-                    Fixup(x.fixupLocation);
-                    statSequence();
+                    BasicBlock elseBlock = new BasicBlock();
+                    elseBlock.kind = BasicBlock.Kind.ELSE;
+
+                    copyVariables(currBlock, elseBlock);
+                    currBlock.rightBlock = elseBlock;
+                    UnCondBraFwd(ifBlock, follow);
+                    Fixup(currBlock, x.fixupLocation);
+                    elseBlock = statSequence(elseBlock);
+                    
                     if(scanner.sym == Token.fiToken){
                         scanner.next();
-                        Fixup(follow.fixupLocation);
-                    }else{
+                        Fixup(ifBlock, follow.fixupLocation);
+                        // Fill join block here
+                        ifBlock.rightBlock = joinBlock;
+                        elseBlock.leftBlock = joinBlock;
+                        currBlock.joinBlock = joinBlock;
+                        generatePhiFunctionsForBranching(joinBlock, ifBlock, elseBlock);
+                        return joinBlock;
+                    } else {
                         error("If missing corresponding fi");
                     }
-                } else{
-                    Fixup(x.fixupLocation);
+                } else {
+                    Fixup(currBlock, x.fixupLocation);
+                    if (scanner.sym == Token.fiToken) {
+                        scanner.next();
+                        ifBlock.rightBlock = joinBlock;
+                        currBlock.joinBlock = joinBlock;
+                        generatePhiFunctionsForBranching(joinBlock, ifBlock, currBlock);
+                    } 
+                }
+            } else {
+                error("No then after if");
+            }
+        } else {
+            error("Error in if statement");
+        }
+        
+        return joinBlock;
+    }
+    
+    private void generatePhiFunctionsForBranching(BasicBlock joinBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
+        Map<String, List<Integer>> leftVariables = leftBlock.variables;
+        Map<String, List<Integer>> rightVariables = rightBlock.variables;
+        
+        for (String var : leftVariables.keySet()) {
+            if (rightVariables.containsKey(var)) {
+                List<Integer> leftVersions = leftVariables.get(var);
+                List<Integer> rightVersions = rightVariables.get(var);
+                
+                int left = leftVersions.get(leftVersions.size() - 1);
+                int right = rightVersions.get(rightVersions.size() - 1);
+                
+                if (left != right) {
+                    Instruction instr = new Instruction();
+                    instr.operation = "PHI";
+                    
+                    Result op1 = new Result();
+                    op1.name = var;
+                    op1.kind = Kind.VAR;
+                    op1.instructionNum = _lineNum;
+                    
+                    Result op2 = new Result();
+                    op2.name = var;
+                    op2.kind = Kind.INSTR;
+                    op2.instructionNum = left;
+                    
+                    Result op3 = new Result();
+                    op3.name = var;
+                    op3.kind = Kind.INSTR;
+                    op3.instructionNum = right;
+                    
+                    instr.op1 = op1;
+                    instr.op2 = op2;
+                    instr.op3 = op3;
+                    instr.instructionNumber = _lineNum;
+                    joinBlock.variables.get(var).add(_lineNum);
+                    joinBlock.instructions.put(_lineNum++, instr);
                 }
             }
-        }else{
-            error("Error in if statement");
         }
     }
 
-    private void whileStatement(){
+    private BasicBlock whileStatement(BasicBlock currBlock){
+        BasicBlock followBlock = new BasicBlock();
         Result x = new Result();
         Result follow = new Result();
         follow.fixupLocation = _lineNum;
+        
         if(scanner.sym == Token.whileToken){
             scanner.next();
-            x = relation();
-            CondNegBraFwd(x);
+            x = relation(currBlock);
+            CondNegBraFwd(currBlock, x);
             if(scanner.sym == Token.doToken){
                 scanner.next();
-                statSequence();
-                UnCondBraFwd(follow);
-                Fixup(x.fixupLocation);
-                if(scanner.sym == Token.odToken){
+                BasicBlock whileBlock = new BasicBlock();
+                whileBlock.variables = new HashMap<String, List<Integer>>(currBlock.variables);
+                currBlock.leftBlock = whileBlock;
+                whileBlock.rightBlock = currBlock;
+                whileBlock = statSequence(whileBlock);
+                UnCondBraFwd(whileBlock, follow);
+                Fixup(currBlock, x.fixupLocation);
+                
+                if(scanner.sym == Token.odToken) {
                     scanner.next();
-                }else{
+                    generatePhiFunctionsForWhileLoop(currBlock, whileBlock, currBlock);
+                } else {
                     error("Do missing corresponding od");
                 }
+            } else {
+                error("No do following while");
             }
         } else {
             error("Error in while statement");
         }
+        
+        return followBlock;
+    }
+    
+    private void generatePhiFunctionsForWhileLoop(BasicBlock headerBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
+        Map<String, List<Integer>> leftVariables = leftBlock.variables;
+        Map<String, List<Integer>> rightVariables = rightBlock.variables;
+        
+        for (String var : leftVariables.keySet()) {
+            if (rightVariables.containsKey(var)) {
+                List<Integer> leftVersions = leftVariables.get(var);
+                List<Integer> rightVersions = rightVariables.get(var);
+                
+                int left = leftVersions.get(leftVersions.size() - 1);
+                int right = rightVersions.get(rightVersions.size() - 1);
+                
+                if (left != right) {
+                    Instruction instr = new Instruction();
+                    instr.operation = "PHI";
+                    
+                    Result op1 = new Result();
+                    op1.name = var;
+                    op1.kind = Kind.VAR;
+                    op1.instructionNum = left;
+                    
+                    Result op2 = new Result();
+                    op2.name = var;
+                    op2.kind = Kind.VAR;
+                    op2.instructionNum = right;
+                    
+                    headerBlock.variables.get(var).add(_lineNum);
+                    headerBlock.instructions.put(_lineNum++, instr);
+                }
+            }
+        }
     }
 
-    private void returnStatement(){
+    private void returnStatement(BasicBlock currBlock){
         if(scanner.sym == Token.returnToken){
             scanner.next();
-            expression();
+            expression(currBlock);
         }else{
             error("Error in return");
         }
@@ -374,16 +554,16 @@ public class Parser {
         return x;
     }
     
-    private Result designator() {
+    private Result designator(BasicBlock currBlock) {
         Result x = ident();
-        if (currBB.variables.containsKey(x.name)) {
-            x.instructionNum = currBB.variables.get(x.name).get(currBB.variables.get(x.name).size() - 1);
+        if (currBlock.variables.containsKey(x.name)) {
+            x.instructionNum = currBlock.variables.get(x.name).get(currBlock.variables.get(x.name).size() - 1);
         } else {
             x.instructionNum = -1;
         }
         while (scanner.sym == Token.openbracketToken) {
             scanner.next();
-            Result y = expression();
+            Result y = expression(currBlock);
             if (scanner.sym == Token.closebracketToken) {
                 scanner.next();
                 // HANDLE ARRAYS
@@ -394,13 +574,13 @@ public class Parser {
         return x;
     }
     
-    private Result factor() {
+    private Result factor(BasicBlock currBlock) {
         Result x = new Result();
         if (scanner.sym == Token.callToken) {
-            funcCall();
+            funcCall(currBlock);
         } else if (scanner.sym == Token.openparanToken) {
             scanner.next();
-            x = expression();
+            x = expression(currBlock);
             if (scanner.sym == Token.closeparanToken) {
                 scanner.next();
             } else {
@@ -409,7 +589,7 @@ public class Parser {
         } else if (scanner.sym == Token.numberToken) {
             x = number();
         } else {
-            x = designator();
+            x = designator(currBlock);
             if (x.instructionNum == -1) {
                 error("Variable used in Factor has not been defined previously");
             } else {
@@ -419,30 +599,30 @@ public class Parser {
         return x;
     }
     
-    private Result term() {
-        Result x = factor();
+    private Result term(BasicBlock currBlock) {
+        Result x = factor(currBlock);
         while (scanner.sym == Token.timesToken || scanner.sym == Token.divToken) {
             int op = scanner.sym;
             scanner.next();
-            Result y = factor();
-            Compute(op, x, y);
+            Result y = factor(currBlock);
+            Compute(currBlock, op, x, y);
         }
         return x;
     }
     
-    private Result expression() {
-        Result x = term();
+    private Result expression(BasicBlock currBlock) {
+        Result x = term(currBlock);
         while (scanner.sym == Token.plusToken || scanner.sym == Token.minusToken) {
             int op = scanner.sym;
             scanner.next();
-            Result y = term();
-            Compute(op, x, y);
+            Result y = term(currBlock);
+            Compute(currBlock, op, x, y);
         }
         return x;
     }
     
     private Result relation(BasicBlock currBlock) {
-        Result x = expression();
+        Result x = expression(currBlock);
         Set<Integer> relOperators = new HashSet<Integer>();
         relOperators.add(Token.eqlToken);
         relOperators.add(Token.neqToken);
@@ -453,8 +633,8 @@ public class Parser {
         if (relOperators.contains(scanner.sym)) {
             int op = scanner.sym;
             scanner.next();
-            Result y = expression();
-            Compute(Token.compare, x, y);
+            Result y = expression(currBlock);
+            Compute(currBlock, Token.compare, x, y);
             x.kind = Kind.CONDN;
             x.cond = op;
         } else {

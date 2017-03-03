@@ -6,11 +6,16 @@ public class Instruction {
     public String operation;
     public Parser.Result op1;
     public Parser.Result op2;
+    public Parser.Result op3;
     int instructionNumber;
     
     public Instruction() {
         kind = Kind.STD;
+        op1 = null;
+        op2 = null;
+        op3 = null;
     }
+    
     @ Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -28,9 +33,20 @@ public class Instruction {
             return sb.toString();
         }
         
-        sb.append(display(op1));
-        sb.append(", ");
-        sb.append(display(op2));
+        if (op1 != null) {
+            sb.append(display(op1));
+        }
+        
+        if (op2 != null) {
+            sb.append(", ");
+            sb.append(display(op2));
+        }
+        
+        if (op3 != null) {
+            sb.append(", ");
+            sb.append(display(op3));
+        }
+        
         return sb.toString();
     }
     
