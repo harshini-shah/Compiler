@@ -296,7 +296,10 @@ public class Parser {
         return x.name.equals("OutputNum") || x.name.equals("InputNum") || x.name.equals("OutputNewLine");
     }
     
-    private void generateFunctionCall(BasicBlock currBlock, Result x, Result y) {
+    private Result generateFunctionCall(BasicBlock currBlock, Result x, Result y) {
+        Result out = new Result();
+        out.kind = Kind.INSTR;
+        out.instructionNum = _lineNum;
         if (x.name.equals("OutputNum")) {
             Instruction instr = new Instruction();
             instr.operation = "WRITE";
@@ -311,10 +314,11 @@ public class Parser {
             instr.operation = "WRITE NEW LINE";
             currBlock.instructions.put(_lineNum++, instr);
         }
-        return;
+        return out;
     }
     
-    private void funcCall(BasicBlock currBlock){
+    private Result funcCall(BasicBlock currBlock){
+        Result res = new Result();
         if(scanner.sym == Token.callToken){
             scanner.next();
             Result x = ident();
@@ -322,7 +326,7 @@ public class Parser {
                 scanner.next();
                 Result y = expression(currBlock);
                 if (isPredefinedFunction(x)) {
-                    generateFunctionCall(currBlock, x, y);
+                    res = generateFunctionCall(currBlock, x, y);
                 }
                 while(scanner.sym == Token.commaToken) {
                     scanner.next();
@@ -339,6 +343,8 @@ public class Parser {
         }else{
             error("Error in funcCall");
         }
+        
+        return res;
     }
     
     private void copyVariables(BasicBlock block1, BasicBlock block2) {
@@ -458,27 +464,45 @@ public class Parser {
 
     private BasicBlock whileStatement(BasicBlock currBlock){
         BasicBlock followBlock = new BasicBlock();
+        followBlock.kind = BasicBlock.Kind.FOLLOW;
+        copyVariables(currBlock, followBlock);
+        
         Result x = new Result();
         Result follow = new Result();
         follow.fixupLocation = _lineNum;
         
         if(scanner.sym == Token.whileToken){
             scanner.next();
-            x = relation(currBlock);
-            CondNegBraFwd(currBlock, x);
+            BasicBlock whileBlock = new BasicBlock();
+            currBlock.leftBlock = whileBlock;
+            whileBlock.kind = BasicBlock.Kind.WHILE;
+            copyVariables(currBlock, whileBlock);
+
+            x = relation(whileBlock);
+            CondNegBraFwd(whileBlock, x);
+            
             if(scanner.sym == Token.doToken){
                 scanner.next();
-                BasicBlock whileBlock = new BasicBlock();
-                whileBlock.variables = new HashMap<String, List<Integer>>(currBlock.variables);
-                currBlock.leftBlock = whileBlock;
-                whileBlock.rightBlock = currBlock;
-                whileBlock = statSequence(whileBlock);
-                UnCondBraFwd(whileBlock, follow);
-                Fixup(currBlock, x.fixupLocation);
+                
+                BasicBlock doBlock = new BasicBlock();
+                whileBlock.leftBlock = doBlock;
+                whileBlock.rightBlock = followBlock;
+                doBlock.leftBlock = whileBlock;
+                doBlock.kind = BasicBlock.Kind.DO;
+                copyVariables(whileBlock, doBlock);
+                
+                doBlock = statSequence(doBlock);
+                UnCondBraFwd(doBlock, follow);
                 
                 if(scanner.sym == Token.odToken) {
                     scanner.next();
-                    generatePhiFunctionsForWhileLoop(currBlock, whileBlock, currBlock);
+                    Map<String, Integer> phi = generatePhiFunctionsForWhileLoop(whileBlock, whileBlock, doBlock);
+                    //add the final values of variables in the follow block variables
+                    updateVariables(phi, followBlock);
+                    // make changes to the variables used in the Do Block if any of them have corresponding phi functions
+                    updateVariablesInInstructions(phi, doBlock);
+                    Fixup(whileBlock, x.fixupLocation);
+
                 } else {
                     error("Do missing corresponding od");
                 }
@@ -492,9 +516,50 @@ public class Parser {
         return followBlock;
     }
     
-    private void generatePhiFunctionsForWhileLoop(BasicBlock headerBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
+    private void updateVariablesInInstructions(Map<String, Integer> phi, BasicBlock doBlock) {
+        Set<Integer> lineNumbers = new HashSet<Integer>();
+        lineNumbers.addAll(doBlock.instructions.keySet());
+        Map<String, Integer> newPhi = new HashMap<String, Integer>(phi);
+        for (Integer line : doBlock.instructions.keySet()) {
+            Instruction currInstr = doBlock.instructions.get(line);
+            if (currInstr.operation.equals("MOV") || currInstr.operation.equals("MOVI")) {
+                System.out.println(newPhi.remove(currInstr.op2.name));
+                changeVariableInstruction(newPhi, currInstr.op1, lineNumbers);
+            } else {
+                changeVariableInstruction(newPhi, currInstr.op1, lineNumbers);
+                changeVariableInstruction(newPhi, currInstr.op2, lineNumbers);
+            }
+            //For each operand check if the variable is in the phi - if yes, then check if the type is an instruction, if
+            // yes then update the number
+            
+        }
+    }
+    
+    private void changeVariableInstruction(Map<String, Integer> phi, Result x, Set<Integer> lineNumbers) {
+        if (x == null || x.name == null) {
+            return;
+        }
+        if (phi.containsKey(x.name) && !lineNumbers.contains(x.instructionNum)) {
+            if (x.kind == Kind.INSTR) {
+                x.instructionNum = phi.get(x.name);
+            }
+        }
+    }
+    
+    private void updateVariables(Map<String, Integer> phi, BasicBlock currBlock) {
+        for (String var : phi.keySet()) {
+            if (currBlock.variables.containsKey(var)) {
+                if (currBlock.variables.get(var).get(currBlock.variables.get(var).size() - 1) != phi.get(var)) {
+                    currBlock.variables.get(var).add(phi.get(var));
+                }
+            }
+        }
+    }
+    
+    private Map<String, Integer> generatePhiFunctionsForWhileLoop(BasicBlock headerBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
         Map<String, List<Integer>> leftVariables = leftBlock.variables;
         Map<String, List<Integer>> rightVariables = rightBlock.variables;
+        Map<String, Integer> phis = new HashMap<String, Integer>();
         
         for (String var : leftVariables.keySet()) {
             if (rightVariables.containsKey(var)) {
@@ -507,22 +572,33 @@ public class Parser {
                 if (left != right) {
                     Instruction instr = new Instruction();
                     instr.operation = "PHI";
+                    instr.instructionNumber = _lineNum;
                     
                     Result op1 = new Result();
                     op1.name = var;
                     op1.kind = Kind.VAR;
-                    op1.instructionNum = left;
                     
                     Result op2 = new Result();
                     op2.name = var;
-                    op2.kind = Kind.VAR;
-                    op2.instructionNum = right;
+                    op2.kind = Kind.INSTR;
+                    op2.instructionNum = left;
                     
+                    Result op3 = new Result();
+                    op3.name = var;
+                    op3.kind = Kind.INSTR;
+                    op3.instructionNum = right;
+                    
+                    instr.op1 = op1;
+                    instr.op2 = op2;
+                    instr.op3 = op3;
                     headerBlock.variables.get(var).add(_lineNum);
+                    phis.put(var, _lineNum);
                     headerBlock.instructions.put(_lineNum++, instr);
                 }
             }
         }
+        
+        return phis;
     }
 
     private void returnStatement(BasicBlock currBlock){
@@ -577,7 +653,7 @@ public class Parser {
     private Result factor(BasicBlock currBlock) {
         Result x = new Result();
         if (scanner.sym == Token.callToken) {
-            funcCall(currBlock);
+            x = funcCall(currBlock);
         } else if (scanner.sym == Token.openparanToken) {
             scanner.next();
             x = expression(currBlock);

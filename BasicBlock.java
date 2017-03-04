@@ -10,7 +10,7 @@ public class BasicBlock {
     public Map<Integer, Instruction> instructions;
     boolean written;
     
-    public enum Kind {STD, IF, ELSE, WHILE, JOIN, FOLLOW}
+    public enum Kind {STD, IF, ELSE, WHILE, JOIN, FOLLOW, DO}
     
     Kind kind;
     
