@@ -8,7 +8,6 @@ import java.util.Set;
 
 public class Parser {
     private Scanner scanner;
-    private Map<Integer, String> opCodeImm;
     private Map<Integer, String> opCode;
     private Map<Integer, Integer> negatedBranchOp;
     private static int _lineNum = 1;
@@ -17,7 +16,6 @@ public class Parser {
     
     public Parser(String fileName){
         scanner = new Scanner(fileName);
-        opCodeImm = new HashMap<Integer, String>();
         opCode = new HashMap<Integer, String>();
         negatedBranchOp = new HashMap<Integer, Integer>();
         symbolTable = new HashMap<Integer, Identifier>();
@@ -29,20 +27,6 @@ public class Parser {
     }
     
     private void populateOpCodes(){
-        opCodeImm.put(11, "ADDI");
-        opCodeImm.put(1, "MULI");
-        opCodeImm.put(2, "DIVI");
-        opCodeImm.put(12, "SUBI");
-        opCodeImm.put(40, "MOVI");
-        opCodeImm.put(19, "CMP");
-        opCodeImm.put(18, "BRA");
-        opCodeImm.put(20, "BEQ");
-        opCodeImm.put(21, "BNE");
-        opCodeImm.put(22, "BLT");
-        opCodeImm.put(23, "BGT");
-        opCodeImm.put(24, "BLE");
-        opCodeImm.put(25, "BGE");
-        
         opCode.put(11, "ADD");
         opCode.put(1, "MUL");
         opCode.put(2, "DIV");
@@ -119,7 +103,7 @@ public class Parser {
             list.add(_lineNum);
             currBlock.variables.put(x.name, list);
             Result dummy1 = new Result();
-            dummy1.kind = Kind.CONST;
+            dummy1.kind = Result.Kind.CONST;
             dummy1.value = 0;
             Compute(currBlock, Token.becomesToken, dummy1, x);
             symbolTable.put(symbolTable.size(), ident);
@@ -129,7 +113,7 @@ public class Parser {
                 x = ident();
                 Identifier ident2 = new Identifier(ident);
                 Result dummy2 = new Result();
-                dummy2.kind = Kind.CONST;
+                dummy2.kind = Result.Kind.CONST;
                 dummy2.value = 0;
                 List<Integer> list2 = new ArrayList<Integer>();
                 list2.add(_lineNum);
@@ -298,8 +282,8 @@ public class Parser {
     
     private Result generateFunctionCall(BasicBlock currBlock, Result x, Result y) {
         Result out = new Result();
-        out.kind = Kind.INSTR;
-        out.instructionNum = _lineNum;
+        out.kind = Result.Kind.INSTR;
+        out.version = _lineNum;
         if (x.name.equals("OutputNum")) {
             Instruction instr = new Instruction();
             instr.operation = "WRITE";
@@ -438,18 +422,18 @@ public class Parser {
                     
                     Result op1 = new Result();
                     op1.name = var;
-                    op1.kind = Kind.VAR;
-                    op1.instructionNum = _lineNum;
+                    op1.kind = Result.Kind.VAR;
+                    op1.version = _lineNum;
                     
                     Result op2 = new Result();
                     op2.name = var;
-                    op2.kind = Kind.INSTR;
-                    op2.instructionNum = left;
+                    op2.kind = Result.Kind.INSTR;
+                    op2.version = left;
                     
                     Result op3 = new Result();
                     op3.name = var;
-                    op3.kind = Kind.INSTR;
-                    op3.instructionNum = right;
+                    op3.kind = Result.Kind.INSTR;
+                    op3.version = right;
                     
                     instr.op1 = op1;
                     instr.op2 = op2;
@@ -491,16 +475,19 @@ public class Parser {
                 doBlock.kind = BasicBlock.Kind.DO;
                 copyVariables(whileBlock, doBlock);
                 
-                doBlock = statSequence(doBlock);
-                UnCondBraFwd(doBlock, follow);
+                BasicBlock temp = new BasicBlock();
+                temp = statSequence(doBlock);
+                UnCondBraFwd(temp, follow);
                 
                 if(scanner.sym == Token.odToken) {
                     scanner.next();
-                    Map<String, Integer> phi = generatePhiFunctionsForWhileLoop(whileBlock, whileBlock, doBlock);
+                    Map<String, Integer> phi = generatePhiFunctionsForWhileLoop(whileBlock, whileBlock, temp);
                     //add the final values of variables in the follow block variables
                     updateVariables(phi, followBlock);
+                                        
                     // make changes to the variables used in the Do Block if any of them have corresponding phi functions
                     updateVariablesInInstructions(phi, doBlock);
+                    
                     Fixup(whileBlock, x.fixupLocation);
 
                 } else {
@@ -520,10 +507,10 @@ public class Parser {
         Set<Integer> lineNumbers = new HashSet<Integer>();
         lineNumbers.addAll(doBlock.instructions.keySet());
         Map<String, Integer> newPhi = new HashMap<String, Integer>(phi);
+        
         for (Integer line : doBlock.instructions.keySet()) {
             Instruction currInstr = doBlock.instructions.get(line);
             if (currInstr.operation.equals("MOV") || currInstr.operation.equals("MOVI")) {
-                System.out.println(newPhi.remove(currInstr.op2.name));
                 changeVariableInstruction(newPhi, currInstr.op1, lineNumbers);
             } else {
                 changeVariableInstruction(newPhi, currInstr.op1, lineNumbers);
@@ -539,9 +526,9 @@ public class Parser {
         if (x == null || x.name == null) {
             return;
         }
-        if (phi.containsKey(x.name) && !lineNumbers.contains(x.instructionNum)) {
-            if (x.kind == Kind.INSTR) {
-                x.instructionNum = phi.get(x.name);
+        if (phi.containsKey(x.name) && !lineNumbers.contains(x.version)) {
+            if (x.kind == Result.Kind.INSTR) {
+                x.version = phi.get(x.name);
             }
         }
     }
@@ -576,17 +563,17 @@ public class Parser {
                     
                     Result op1 = new Result();
                     op1.name = var;
-                    op1.kind = Kind.VAR;
-                    
-                    Result op2 = new Result();
-                    op2.name = var;
-                    op2.kind = Kind.INSTR;
-                    op2.instructionNum = left;
+                    op1.kind = Result.Kind.VAR;
                     
                     Result op3 = new Result();
                     op3.name = var;
-                    op3.kind = Kind.INSTR;
-                    op3.instructionNum = right;
+                    op3.kind = Result.Kind.INSTR;
+                    op3.version = left;
+                    
+                    Result op2 = new Result();
+                    op2.name = var;
+                    op2.kind = Result.Kind.INSTR;
+                    op2.version = right;
                     
                     instr.op1 = op1;
                     instr.op2 = op2;
@@ -616,7 +603,7 @@ public class Parser {
     
     private Result number() {
         Result x = new Result();
-        x.kind = Kind.CONST;
+        x.kind = Result.Kind.CONST;
         x.value = scanner.val;
         scanner.next();
         return x;
@@ -624,7 +611,7 @@ public class Parser {
     
     private Result ident() {
         Result x = new Result();
-        x.kind = Kind.VAR;
+        x.kind = Result.Kind.VAR;
         x.name = scanner.name;
         scanner.next();
         return x;
@@ -633,9 +620,9 @@ public class Parser {
     private Result designator(BasicBlock currBlock) {
         Result x = ident();
         if (currBlock.variables.containsKey(x.name)) {
-            x.instructionNum = currBlock.variables.get(x.name).get(currBlock.variables.get(x.name).size() - 1);
+            x.version = currBlock.variables.get(x.name).get(currBlock.variables.get(x.name).size() - 1);
         } else {
-            x.instructionNum = -1;
+            x.version = -1;
         }
         while (scanner.sym == Token.openbracketToken) {
             scanner.next();
@@ -666,10 +653,11 @@ public class Parser {
             x = number();
         } else {
             x = designator(currBlock);
-            if (x.instructionNum == -1) {
+            if (x.version == -1) {
                 error("Variable used in Factor has not been defined previously");
             } else {
-                x.kind = Kind.INSTR;
+                x.kind = Result.Kind.INSTR;
+                x.name = null;
             }
         }
         return x;
@@ -711,7 +699,7 @@ public class Parser {
             scanner.next();
             Result y = expression(currBlock);
             Compute(currBlock, Token.compare, x, y);
-            x.kind = Kind.CONDN;
+            x.kind = Result.Kind.CONDN;
             x.cond = op;
         } else {
             error("Relation has just one operand");
@@ -745,7 +733,7 @@ public class Parser {
     }
     
     private void Compute(BasicBlock currBlock, int op, Result x, Result y){
-        if (x.kind == Kind.CONST && y.kind == Kind.CONST){
+        if (x.kind == Result.Kind.CONST && y.kind == Result.Kind.CONST){
             if(op == Token.timesToken)
                 x.value *= y.value;
             else if(op == Token.plusToken)
@@ -756,11 +744,11 @@ public class Parser {
                 x.value /= y.value;                                                 //check if division by zero needs to be checked
         } else {
             Map<Integer, String> opCodes;
-            if (x.kind == Kind.CONST || y.kind == Kind.CONST) {
-                opCodes = opCodeImm;
-            } else {
+//            if (x.kind == Kind.CONST || y.kind == Kind.CONST) {
+//                opCodes = opCodeImm;
+//            } else {
                 opCodes = opCode;
-            }
+//            }
             
             Instruction instr = new Instruction();
             instr.instructionNumber = _lineNum;
@@ -768,35 +756,9 @@ public class Parser {
             instr.op1 = new Result(x);
             instr.op2 = y;
             currBlock.instructions.put(_lineNum++, instr);
-            x.kind = Kind.INSTR;
-            x.instructionNum = _lineNum - 1;
+            x.kind = Result.Kind.INSTR;
+            x.version = _lineNum - 1;
         }
-    }
+    }    
     
-    public enum Kind{
-        CONST, VAR, CONDN, INSTR
-    }
-    
-    public class Result{
-        public Kind kind;
-        public int value;
-        public int id;
-        public String name;
-        public int cond;
-        public int fixupLocation;
-        public int instructionNum;
-        
-        public Result() {   
-        }
-        
-        public Result(Result x) {
-            this.kind = x.kind;
-            this.value = x.value;
-            this.fixupLocation = x.fixupLocation;
-            this.id = x.id;
-            this.name = x.name;
-            this.cond = x.cond;
-            this.instructionNum = x.instructionNum;
-        }
-    }
 }
