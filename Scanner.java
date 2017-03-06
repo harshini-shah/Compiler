@@ -4,23 +4,19 @@ import java.util.Map;
 public class Scanner {
     public int sym;
     public int val;
-    public int id;
+    public String name;
     private FileReader _fr;
-    private static int _symbolCount;
-    Map<String, Integer> tokenTable;
-    Map<String, Integer> symbolTable;
+    public Map<String, Integer> tokenTable;
     
     public Scanner(String fileName) {
         _fr = new FileReader(fileName);
         _fr.next();
         tokenTable = new HashMap<String, Integer>();
-        symbolTable = new HashMap<String, Integer>();
         populateTokenTable();
     }
     
     public void next() {
     	if(_fr.sym != Token.eofToken){
-    		boolean comment = false;
     		while(Character.isWhitespace(_fr.sym)){
     			_fr.next();
     		}
@@ -41,8 +37,8 @@ public class Scanner {
 		    			}else if(_fr.sym == '<' && _fr.lookAhead() == '-'){
 		    				sym = Token.becomesToken;
 		    				_fr.next();
-		    			} else if (_fr.lookAhead() == ' ') {
-		    			    sym = tokenTable.get(Character.toString(_fr.sym));
+		    			} else if (_fr.sym == '<' || _fr.sym == '>') {
+		    			    sym = tokenTable.get(String.valueOf(_fr.sym));
 		    			}
 		    			break;
 		    		}
@@ -54,8 +50,7 @@ public class Scanner {
 		    		}
 	    		}
 	    	}
-	    	if(!comment)
-	    		_fr.next();
+	    	_fr.next();
     	}else{
     		sym = Token.eofToken;
     	}
@@ -91,8 +86,7 @@ public class Scanner {
             sym = tokenTable.get(tok);
         }else{
             sym = 61;
-            id = _symbolCount++;
-            symbolTable.put(tok, id);
+            name = tok;
         }
     }
     
