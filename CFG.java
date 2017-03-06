@@ -1,6 +1,6 @@
 
 public class CFG {
-    public BasicBlock startBlock;
+    public static BasicBlock startBlock;
     public String name;
     
     public CFG() {
