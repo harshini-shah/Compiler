@@ -25,9 +25,11 @@ public class CSE {
 				if(instr.op3 != null && instr.op3.kind == Result.Kind.INSTR && replaceWith.containsKey(instr.op3.version)){
 					instr.op3.version = replaceWith.get(instr.op3.version);
 				}
-				//TODO: IMPORTANT cmp or create a new kind for expression
-				if(instr.kind == Instruction.Kind.STD && !instr.operation.equals("MOV")){
+				
+				if(instr.kind == Instruction.Kind.STD && instr.isExpression()){
 					ExpressionOperands eop = new ExpressionOperands(instr.op1, instr.op2);
+					if(instr.isCommutativeExpression())
+						eop.setCommutative(true);
 					if(anchor.containsKey(instr.operation)){
 						HashMap<ExpressionOperands, Integer> searchDS = anchor.get(instr.operation);
 						if(searchDS.containsKey(eop)){

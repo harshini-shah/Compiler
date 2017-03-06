@@ -62,4 +62,12 @@ public class Instruction {
 
         return sb.toString();
     }
+    
+    public boolean isExpression(){
+    	return isCommutativeExpression() || this.operation.equals("SUB") || this.operation.equals("DIV");
+    }
+    
+    public boolean isCommutativeExpression(){
+    	return this.operation.equals("ADD") || this.operation.equals("MUL");
+    }
 }
