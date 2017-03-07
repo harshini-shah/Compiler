@@ -5,7 +5,8 @@ public class Token {
     public static final int divToken = 2;
     public static final int plusToken = 11;
     public static final int minusToken = 12;
-    public static final int compare = 19;
+    public static final int branchToken = 18;
+    public static final int compareToken = 19;
     public static final int eqlToken = 20;
     public static final int neqToken = 21;
     public static final int lssToken = 22;

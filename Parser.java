@@ -1,3 +1,10 @@
+/*
+ * THINGS NOT 100% SURE OF:
+ * 1. Not sure of what the symbol table does exactly
+ * 2. The function blocks is now a list of CFGs - will have to change later once deal with functions
+ * 3. For all the functions, the 'function (or CFG)' should also be passed as a parameter? 
+ */
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,90 +15,712 @@ import java.util.Set;
 
 public class Parser {
     private Scanner scanner;
-    private Map<Integer, String> opCode;
-    private Map<Integer, Integer> negatedBranchOp;
     private static int _lineNum = 1;
-    public static Map<Integer, Identifier> symbolTable;
-    List<CFG> functionBlocks;
+    public static Map<String, Identifier> symbolTable;
+    public Set<Integer> relationOperators;
+    public List<CFG> functionCFGs;
     
-    public Parser(String fileName){
+    /*
+     * The parser is initialized with a file name, which is turn initializes the scanner with this file.
+     * The Symbol table is a HashMap of String to Identifiers - which stores each variable, array and function
+     * of the program. 
+     * Every function has its own control flow graph - for now, assuming there is only the main function, one CFG
+     * is initialized and its starting block is created. 
+     * The main CFG is added to the list of CFGs (the size of this list = number of functions in the program)
+     * then the main computation is started.
+     */
+    public Parser(String fileName) {
         scanner = new Scanner(fileName);
-        opCode = new HashMap<Integer, String>();
-        negatedBranchOp = new HashMap<Integer, Integer>();
-        symbolTable = new HashMap<Integer, Identifier>();
+        relationOperators = new HashSet<Integer>();
+        relationOperators.add(Token.eqlToken);
+        relationOperators.add(Token.neqToken);
+        relationOperators.add(Token.leqToken);
+        relationOperators.add(Token.lssToken); 
+        relationOperators.add(Token.geqToken);
+        relationOperators.add(Token.gtrToken);
+        symbolTable = new HashMap<String, Identifier>();
         CFG mainFunction = new CFG();
-        functionBlocks = new LinkedList<CFG>();
-        functionBlocks.add(mainFunction);
-        populateOpCodes();
+        functionCFGs = new LinkedList<CFG>();
+        functionCFGs.add(mainFunction);
         computation(mainFunction.startBlock);
     }
     
-    private void populateOpCodes(){
-        opCode.put(11, "ADD");
-        opCode.put(1, "MUL");
-        opCode.put(2, "DIV");
-        opCode.put(12, "SUB");
-        opCode.put(40, "MOV");
-        opCode.put(19, "CMP");
-        opCode.put(18, "BRA");
-        opCode.put(20, "BEQ");
-        opCode.put(21, "BNE");
-        opCode.put(22, "BLT");
-        opCode.put(23, "BGE");
-        opCode.put(24, "BLE");
-        opCode.put(25, "BGT");
-        
-        negatedBranchOp.put(20, 21);
-        negatedBranchOp.put(21, 20);
-        negatedBranchOp.put(22, 23);
-        negatedBranchOp.put(23, 22);
-        negatedBranchOp.put(24, 25);
-        negatedBranchOp.put(25, 24);
-    }
-    
-    private void computation(BasicBlock currBlock){
+    /*
+     * Checks the syntax - assume for now that there are no functions.
+     * The current block is sent to the variable declarations, since all declarations will be
+     * in the same block only. 
+     * The current block is sent to the statement sequence and the last block is gotten back from it. 
+     * The EOF instruction is appended at the end of the last block on encountering the final 'period' token.
+     */
+    private void computation(BasicBlock currBlock) {
         scanner.next();
-        while(scanner.sym != Token.eofToken){
-            if(scanner.sym == Token.mainToken){
+        while (scanner.sym != Token.eofToken) {
+            if (scanner.sym == Token.mainToken) {
                 scanner.next();
-                while(scanner.sym == Token.varToken || scanner.sym == Token.arrToken){
+                while (scanner.sym == Token.varToken || scanner.sym == Token.arrToken) {
                     varDecl(currBlock);
                 }
-                while(scanner.sym == Token.funcToken || scanner.sym == Token.procToken){
-                    funcDecl(currBlock);
+                while (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
+                    funcDecl(currBlock, null);
                 }
-                if(scanner.sym == Token.beginToken){
+                if (scanner.sym == Token.beginToken) {
                     scanner.next();
-                    currBlock = statSequence(currBlock);
-                    if(scanner.sym == Token.endToken){
+                    BasicBlock finalBlock = statSequence(currBlock, null);
+                    if(scanner.sym == Token.endToken) {
                         scanner.next();
-                        if(scanner.sym != Token.periodToken){
+                        
+                        // Inserting the EOF instruction
+                        Instruction instr = new Instruction();
+                        instr.kind = Instruction.Kind.END;
+                        instr.operation = "EOF";
+                        finalBlock.instructions.put(_lineNum, instr);
+                        
+                        if (scanner.sym != Token.periodToken) {
                             error("Program doesn't end with a period");
                         } else {
                             scanner.next();
                         }
-                    }else{
+                    } else {
                         error("Missing } of main");
                     }
-                } else{
+                } else {
                     error("Missing { of main");
                 }
+            } else {
+                error("Missing 'main' in computation");
             }
         }
         
-        Instruction instr = new Instruction();
-        instr.kind = Instruction.Kind.END;
-        instr.operation = "EOF";
-        currBlock.instructions.put(_lineNum, instr);
-        
-        for (CFG cfg : functionBlocks) {
+        // Printing out the IR - only temporary
+        for (CFG cfg : functionCFGs) {
             VisualizeCFG test = new VisualizeCFG(cfg.startBlock);
         }
+    }
+    
+    /*
+     * Prints the appropriate error message for syntax errors
+     */
+    private void error(String errorMsg){
+        scanner.error(errorMsg);
+    }
+    
+    /*
+     * If the token is a constant - makes a Result object, sets its type and value and returns it.
+     */
+    private Result number() {
+        Result x = new Result();
+        x.kind = Result.Kind.CONST;
+        x.value = scanner.val;
+        scanner.next();
+        return x;
+    }
+    
+    /*
+     * Make a Result - sets the type to Var, sets its name and returns it.
+     * For now, assumed there are only single variables, no arrays.
+     */
+    private Result ident() {
+        Result x = new Result();
+        x.kind = Result.Kind.VAR;
+        x.name = scanner.name;
+        scanner.next();
+        return x;
+    }
+    
+    /*
+     * Always returns a Result of type Var - Depending on the calling function, this is unchanged (if it is
+     * an assignment that calls it) or it is changed to type "INSTR" (for factor - or any other calling function).
+     * For now, not handled arrays.
+     */
+    private Result designator(BasicBlock currBlock) {
+        Result x = ident();
+        if (currBlock.variables.containsKey(x.name)) {
+            x.version = currBlock.variables.get(x.name).get(currBlock.variables.get(x.name).size() - 1);
+        } else {
+            error("Uninitialized Variable");
+        }
+        while (scanner.sym == Token.openbracketToken) {
+            scanner.next();
+            Result y = expression(currBlock);
+            if (scanner.sym == Token.closebracketToken) {
+                scanner.next();
+                // HANDLE ARRAYS
+            } else {
+                error("No ] after the expression in designator (for array)");
+            }
+        }
+        return x;
+    }
+    
+    /*
+     * Creates a Result - there are four cases:
+     * - It is a constant - then call number()
+     * - It is a function call - deal with this later
+     * - It is an open parenthesis - call expression()
+     * - It is a designator 
+     */
+    private Result factor(BasicBlock currBlock) {
+        Result x = new Result();
+        if (scanner.sym == Token.callToken) {
+            x = funcCall(currBlock);
+        } else if (scanner.sym == Token.openparanToken) {
+            scanner.next();
+            x = expression(currBlock);
+            if (scanner.sym == Token.closeparanToken) {
+                scanner.next();
+            } else {
+                error("No closing parenthesis for expression in factor");
+            }
+        } else if (scanner.sym == Token.numberToken) {
+            x = number();
+        } else {
+            x = designator(currBlock);
+            x.kind = Result.Kind.INSTR;
+            x.name = null;
+        }
+        return x;
+    }
+    
+    /*
+     * Takes two Results, generates the instruction for their multiplication/division, 
+     * and returns the results of type instruction with instruction number set. (= lineNum)
+     */
+    private Result term(BasicBlock currBlock) {
+        Result x = factor(currBlock);
+        while (scanner.sym == Token.timesToken || scanner.sym == Token.divToken) {
+            int op = scanner.sym;
+            scanner.next();
+            Result y = factor(currBlock);
+            Compute(currBlock, op, x, y);
+        }
+        return x;
+    }
+    
+    /*
+     * Takes in two Results, and generates an instruction according to the opCode.
+     * - If both are constants, no instruction is generated, the result is still of type CONST
+     * and the value is modified according to the opcode.
+     * - Otherwise, an instruction is generated - and the return type is a instruction with the instruction
+     * line set accordingly.
+     */
+    private void Compute(BasicBlock currBlock, int op, Result x, Result y) {
+        if (x.kind == Result.Kind.CONST && y.kind == Result.Kind.CONST && op != Token.compareToken) {
+            if(op == Token.timesToken)
+                x.value *= y.value;
+            else if(op == Token.plusToken)
+                x.value += y.value;
+            else if(op == Token.minusToken)
+                x.value -= y.value;
+            else if(op == Token.divToken)
+                x.value /= y.value;
+        } else {
+            Instruction instr = new Instruction();
+            instr.instructionNumber = _lineNum;
+            instr.operation = OpCode.get(op);
+            instr.op1 = new Result(x);
+            instr.op2 = y;
+            currBlock.instructions.put(_lineNum++, instr);
+            x.kind = Result.Kind.INSTR;
+            x.name = null;
+            x.value = 0;
+            x.version = _lineNum - 1;
+        }
+    }    
+    
+    /*
+     * Generates a compare instruction and returns a result of type CONDN and the condition set to the op
+     */
+    private Result relation(BasicBlock currBlock) {
+        Result x = expression(currBlock);
+        if (relationOperators.contains(scanner.sym)) {
+            int op = scanner.sym;
+            scanner.next();
+            Result y = expression(currBlock);
+            Compute(currBlock, Token.compareToken, x, y);
+            x.kind = Result.Kind.CONDN;
+            x.cond = op;
+            x.fixupLocation = 0;
+        } else {
+            error("Relation does not have a relation Operator");
+        }
+        return x;
+    }
+    
+    /* 
+     * Generates an instruction, and returns a result of the type instruction
+     */
+    private Result expression(BasicBlock currBlock) {
+        Result x = term(currBlock);
+        while (scanner.sym == Token.plusToken || scanner.sym == Token.minusToken) {
+            int op = scanner.sym;
+            scanner.next();
+            Result y = term(currBlock);
+            Compute(currBlock, op, x, y);
+        }
+        return x;
+    }
+    
+    /*
+     * Copies the variables map - which is a map of variables to a linked list of all the versions of it
+     * from block1 to block2.
+     */
+    private void copyVariables(BasicBlock block1, BasicBlock block2) {
+        for (String str : block1.variables.keySet()) {
+            block2.variables.put(str, new ArrayList<Integer>(block1.variables.get(str)));
+        }
+    }
+    
+    /*
+     * Generates a conditional branch instruction - the operation is the negative equivalent of  
+     * the condition of x. The fixup location of x is adjusted to point to this location so that
+     * the instruction number of the instruction can be changed later.
+     */
+    private void CondNegBraFwd(BasicBlock currBlock, Result x){
+        x.fixupLocation = _lineNum;
+        Instruction instr = new Instruction();
+        instr.kind = Instruction.Kind.BRANCH;
+        instr.instructionNumber = _lineNum;
+        instr.op1 = x;
+        instr.operation = OpCode.get(NegatedBranchOp.get(x.cond));
+        currBlock.instructions.put(_lineNum++, instr);
+    }
+    
+    /*
+     * Generates an Unconditional branch statement - and sets the fixup location of the x to point to this
+     * instruction so the instruction can be changed later
+     */
+    private void UnCondBraFwd(BasicBlock currBlock, Result x){
+        Instruction instr = new Instruction();
+        instr.kind = Instruction.Kind.BRANCH;
+        instr.instructionNumber = _lineNum;
+        instr.op1 = new Result(x);
+        instr.operation = OpCode.get(Token.branchToken);
+        currBlock.instructions.put(_lineNum++, instr);
+        x.fixupLocation = _lineNum - 1;
+    }
+    
+    /*
+     * Changes the instruction in 'currBlock' which is at 'fixupLocation' which is always
+     * going to be a branch instruction - to now point to the current line number
+     */
+    private void Fixup(BasicBlock currBlock, int fixupLocation) {
+        Instruction instr = currBlock.instructions.get(fixupLocation);
+        instr.op1.fixupLocation = _lineNum;
+    }
+    
+    /*
+     * The last blocks for the if and else blocks of the branching are obtained (by calling statSequence on them).
+     * After getting these, 2 things are done:
+     * - The phi functions for the join block are generated by comparing the version number for every variable in the 
+     * 2 blocks (assumes that there are no new variables - so some version of all variables does exist in both the blocks.
+     * - depending on the phi functions, the versions of the variables are updated in the joinBlock. 
+     * 
+     *  The child links are set as follows: 
+     *  - currBlock.joinBlock --> joinBlock (always set)
+     *  - currBlock.leftBlock --> ifBlock (always set)
+     *  - currBlock.rightBlock --> ElseBlock (if else does exist)
+     *  
+     * For the finalIfBlock (same as ifBlock if no nested loops within if branch, different otherwise):
+     * - finalIfBlock.rightBlock --> joinBlock (always set)
+     * 
+     * If the finalElseBlock exists: (same as elseBlock if no nesting within the else statements, different otherwise)
+     * - finalElseBlock.leftBlock --> joinBlock
+     * 
+     * In case of nesting loops, every variable that has some phi condition anywhere within any of the nested loops 
+     * in the if/else blocks generate a phi function in the current join block.
+     * 
+     * The if, else and join blocks are added to the joinBlocks list (in that order to the head of the list) so that 
+     * if this is within a nested while loop, the changes by the phi functions can be reflected in these too.
+     */
+    private BasicBlock ifStatement(BasicBlock currBlock, List<BasicBlock> joinBlocks){
+        BasicBlock joinBlock = new BasicBlock();
+        joinBlock.kind = BasicBlock.Kind.JOIN;
+
+        currBlock.joinBlock = joinBlock;
+        copyVariables(currBlock, joinBlock);
         
-//        int count = 1;
-//        for (Instruction i : instructions.values()) {
-//            System.out.println(count++ + "\t" + i.toString());
-//        }
+        if(scanner.sym == Token.ifToken){
+            Result follow = new Result();
+            follow.fixupLocation = 0;
+            scanner.next();
+            Result x = relation(currBlock);
+            CondNegBraFwd(currBlock, x);
+            
+            if(scanner.sym == Token.thenToken){
+                scanner.next();
+
+                BasicBlock ifBlock = new BasicBlock();
+                ifBlock.kind = BasicBlock.Kind.IF;
+                currBlock.leftBlock = ifBlock;
+                copyVariables(currBlock, ifBlock);
+                
+                if (joinBlocks == null) {
+                    joinBlocks = new ArrayList<BasicBlock>();
+                }
+                
+                BasicBlock finalIfBlock = statSequence(ifBlock, joinBlocks);
+                joinBlocks.add(0, ifBlock);
+                
+                if(scanner.sym == Token.elseToken){
+                    scanner.next();
+                    BasicBlock elseBlock = new BasicBlock();
+                    elseBlock.kind = BasicBlock.Kind.ELSE;
+                    copyVariables(currBlock, elseBlock);
+                    currBlock.rightBlock = elseBlock;
+                    
+                    UnCondBraFwd(finalIfBlock, follow);
+                    Fixup(currBlock, x.fixupLocation);
+                    
+                    BasicBlock finalElseBlock = statSequence(elseBlock, joinBlocks);
+                    joinBlocks.add(0, elseBlock);
+                                        
+                    if(scanner.sym == Token.fiToken){
+                        scanner.next();
+                        Fixup(finalIfBlock, follow.fixupLocation);
+                        
+                        // Fill join block here
+                        finalIfBlock.rightBlock = joinBlock;
+                        finalElseBlock.leftBlock = joinBlock;
+                        
+                        // Get the phi functions for this block by comparing the variable versions of the lastIfBlock
+                        // and lastElseBlock
+                        generatePhiFunctions(joinBlock, finalIfBlock, finalElseBlock);
+                        
+                        // Update variable version numbers in join block
+                        updateVariables(joinBlock, joinBlock);
+                        joinBlocks.add(0, joinBlock);
+
+                    } else {
+                        error("If missing corresponding fi");
+                    }
+                } else {
+                    Fixup(currBlock, x.fixupLocation);
+                    if (scanner.sym == Token.fiToken) {
+                        scanner.next();
+                        finalIfBlock.rightBlock = joinBlock;
+                        
+                        // Get phi functions by comparing the variable versions of the lastIfBlock and the currBlock
+                        generatePhiFunctions(joinBlock, finalIfBlock, currBlock);
+                        
+                        // Update variable versions in join block
+                        updateVariables(joinBlock, joinBlock);
+                    } 
+                }
+            } else {
+                error("No then after if");
+            }
+        } else {
+            error("Error in if statement");
+        }
+        
+        return joinBlock;
+    }
+    
+    /*
+     * Updating all the variable version numbers to be the results of the phi instructions
+     */
+    private void updateVariables(BasicBlock phiBlock, BasicBlock updateBlock) {
+        Map<Integer, Instruction> phiInstructions = phiBlock.getPhiInstructions();
+        for (Instruction instr : phiInstructions.values()) {
+            String var = instr.op1.name;
+            updateBlock.variables.get(var).add(instr.instructionNumber);
+        }
+    }
+    
+    /*
+     * Calls statement() for all the statements in the program and returns the final basic block
+     */
+    private BasicBlock statSequence(BasicBlock currBlock, List<BasicBlock> joinBlocks) {
+        currBlock = statement(currBlock, joinBlocks);
+        while (scanner.sym == Token.semiToken) {
+            scanner.next();
+            currBlock = statement(currBlock, joinBlocks);
+        }
+        
+        return currBlock;
+    }
+    
+    /*
+     * Depending on the token, the appropriate function is called and the final basic block is returned 
+     * - in case of if - it is the last join block
+     * - in case of while, it is the follow block
+     * - for any other statements, it is the same block that is passed in
+     */
+    private BasicBlock statement(BasicBlock currBlock, List<BasicBlock> joinBlocks){
+        if (scanner.sym == Token.letToken){
+            assignment(currBlock);
+        } else if (scanner.sym == Token.callToken){
+            funcCall(currBlock);
+        } else if (scanner.sym == Token.ifToken){
+            currBlock = ifStatement(currBlock, joinBlocks);
+        } else if (scanner.sym == Token.whileToken){
+            currBlock = whileStatement(currBlock, joinBlocks);
+        } else if (scanner.sym == Token.returnToken){
+            returnStatement(currBlock);
+        }
+        
+        return currBlock;
+    }
+    
+    /*
+     * Comparing the lastIfBlock and the lastElseBlock (or the current block) and generating Phi Functions based on the difference in
+     * version numbers
+     */
+    private void generatePhiFunctions(BasicBlock joinBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
+        Map<String, List<Integer>> leftVariables = leftBlock.variables;
+        Map<String, List<Integer>> rightVariables = rightBlock.variables;
+        
+        for (String var : leftVariables.keySet()) {
+            if (rightVariables.containsKey(var)) {
+                List<Integer> leftVersions = leftVariables.get(var);
+                List<Integer> rightVersions = rightVariables.get(var);
+                
+                int left = leftVersions.get(leftVersions.size() - 1);
+                int right = rightVersions.get(rightVersions.size() - 1);
+                
+                if (left != right) {
+                    Instruction instr = new Instruction();
+                    instr.kind = Instruction.Kind.PHI;
+                    instr.operation = "PHI";
+                    
+                    Result op1 = new Result();
+                    op1.name = var;
+                    op1.kind = Result.Kind.VAR;
+                    op1.version = _lineNum;
+                    
+                    Result op2 = new Result();
+                    op2.name = var;
+                    op2.kind = Result.Kind.INSTR;
+                    op2.version = left;
+                    
+                    Result op3 = new Result();
+                    op3.name = var;
+                    op3.kind = Result.Kind.INSTR;
+                    op3.version = right;
+                    
+                    instr.op1 = op1;
+                    instr.op2 = op2;
+                    instr.op3 = op3;
+                    instr.instructionNumber = _lineNum;
+                    joinBlock.instructions.put(_lineNum++, instr);
+                }
+            }
+        }
+    }    
+    
+    /*
+     * The function is used to update the values of operands according to the phi functions introduced at the 
+     * header of the while loop. It is only called from the while loop. 
+     * 
+     * It takes in as parameters the block in which the values have to be checked and changed if necessary and
+     * a mapping of the old version number of a variable to a new one according to the phi function.
+     * 
+     * It first looks at all the phi functions of the block, and replaces its operands (op1 and op2 only) if 
+     * required. Then using the phi functions, the mappings is updated to reflect new version numbers, and then
+     * the replacement is done for all the rest of the instructions.
+     */
+    private void updateVariablesToPhiValues(BasicBlock currBlock, Map<Integer, Integer> mappings) {
+        Map<Integer, Instruction> phiInstructions = currBlock.getPhiInstructions();
+        
+        for (Instruction instr : phiInstructions.values()) {
+            if (instr.kind == Instruction.Kind.PHI) {
+                if (mappings.containsKey(instr.op3.version)) {
+                    instr.op3.version = mappings.get(instr.op3.version);
+                }
+                
+                if (mappings.containsKey(instr.op2.version)) {
+                    instr.op2.version = mappings.get(instr.op2.version);
+                }
+            }
+        }
+              
+        for (Instruction instr : phiInstructions.values()) {
+            if (!mappings.containsKey(instr.op2.version)) {
+                mappings.put(instr.op2.version, instr.instructionNumber);
+            }  
+        }
+        
+        for (Instruction instr : currBlock.instructions.values()) {
+            if (instr.kind == Instruction.Kind.STD) {
+                if (mappings.containsKey(instr.op1.version)) {
+                    instr.op1.version = mappings.get(instr.op1.version);
+                }
+                
+                if (mappings.containsKey(instr.op2.version)) {
+                    instr.op2.version = mappings.get(instr.op2.version);
+                }
+            }
+        }
+    }
+    
+    /*
+     * 
+     */
+    private BasicBlock whileStatement(BasicBlock currBlock, List<BasicBlock> joinBlocks){
+        BasicBlock followBlock = new BasicBlock();
+        followBlock.kind = BasicBlock.Kind.FOLLOW;
+        copyVariables(currBlock, followBlock);
+        
+        Result x = new Result();
+        Result follow = new Result();
+        follow.fixupLocation = _lineNum;
+        
+        if(scanner.sym == Token.whileToken){
+            scanner.next();
+            BasicBlock whileBlock = new BasicBlock();
+            currBlock.leftBlock = whileBlock;
+            whileBlock.kind = BasicBlock.Kind.WHILE;
+            copyVariables(currBlock, whileBlock);
+
+            x = relation(whileBlock);
+            CondNegBraFwd(whileBlock, x);
+            
+            if(scanner.sym == Token.doToken){
+                scanner.next();
+                
+                BasicBlock doBlock = new BasicBlock();
+                whileBlock.leftBlock = doBlock;
+                whileBlock.rightBlock = followBlock;
+                doBlock.leftBlock = whileBlock;
+                doBlock.kind = BasicBlock.Kind.DO;
+                copyVariables(whileBlock, doBlock);
+                
+                if (joinBlocks == null) {
+                    joinBlocks = new ArrayList<BasicBlock>();
+                }
+                
+                BasicBlock lastDoBlock = statSequence(doBlock, joinBlocks);
+                joinBlocks.add(0, doBlock);
+                joinBlocks.add(0, whileBlock);
+                
+                UnCondBraFwd(lastDoBlock, follow);
+                
+                if(scanner.sym == Token.odToken) {
+                    scanner.next();
+                    
+                    // Generate the phi functions in the header block based on the difference in version
+                    // numbers of variables in the while block and the lastDoBlock
+                    generatePhiFunctions(whileBlock, whileBlock, lastDoBlock);
+                    
+                    //add the final values of variables in the follow block variables
+                    updateVariables(whileBlock, followBlock);
+                    
+                    // make changes to the variables used in the Do Block and the While block too 
+                    // if any of them have corresponding phi functions
+                    Map<Integer, Integer> mappings = new HashMap<Integer, Integer>();
+                    for (BasicBlock joinBlock : joinBlocks) {
+                        updateVariablesToPhiValues(joinBlock, mappings);
+                    }
+                    
+                    Fixup(whileBlock, x.fixupLocation);
+
+                } else {
+                    error("Do missing corresponding od");
+                }
+            } else {
+                error("No do following while");
+            }
+        } else {
+            error("Error in while statement");
+        }
+        
+        return followBlock;
+    }
+    
+    ////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+    private void assignment(BasicBlock currBlock){
+        if (scanner.sym == Token.letToken) {
+            scanner.next();
+            Result x = designator(currBlock);
+            if (scanner.sym == Token.becomesToken) {
+                scanner.next();
+                Result y = expression(currBlock);
+                if (currBlock.variables.containsKey(x.name)) {
+                    currBlock.variables.get(x.name).add(_lineNum);
+                } else {
+                    List<Integer> lineNumbers = new ArrayList<Integer>();
+                    lineNumbers.add(_lineNum);
+                    currBlock.variables.put(x.name, lineNumbers);
+                }
+                Compute(currBlock, Token.becomesToken, y, x);
+
+            } else {
+                error("Assignment: designator must be followed by <-");
+            }
+        } else {
+            error("Error in assignment");
+        }
+    }
+    
+    /*
+     * Checks for the 3 predefined functions - OutputNum, InputNum, OutputNewLine
+     */
+    private boolean isPredefinedFunction(Result x) {
+        return x.name.equals("OutputNum") || x.name.equals("InputNum") || x.name.equals("OutputNewLine");
+    }
+    
+    private Result generateFunctionCall(BasicBlock currBlock, Result x, Result y) {
+        Result out = new Result();
+        out.kind = Result.Kind.INSTR;
+        out.version = _lineNum;
+        if (x.name.equals("OutputNum")) {
+            Instruction instr = new Instruction();
+            instr.kind = Instruction.Kind.FUNC;
+            instr.operation = "WRITE";
+            instr.op1 = y;
+            currBlock.instructions.put(_lineNum++, instr);
+        } else if (x.name.equals("InputNum")) {
+            Instruction instr = new Instruction();
+            instr.kind = Instruction.Kind.FUNC;
+            instr.operation = "READ";
+            currBlock.instructions.put(_lineNum++, instr);
+        } else if (x.name.equals("OutputNewLine")) {
+            Instruction instr = new Instruction();
+            instr.kind = Instruction.Kind.FUNC;
+            instr.operation = "WRITE NEW LINE";
+            currBlock.instructions.put(_lineNum++, instr);
+        }
+        return out;
+    }
+    
+    private Result funcCall(BasicBlock currBlock){
+        Result res = new Result();
+        if(scanner.sym == Token.callToken){
+            scanner.next();
+            Result x = ident();
+            if(scanner.sym == Token.openparanToken){
+                scanner.next();
+                Result y = expression(currBlock);
+                if (isPredefinedFunction(x)) {
+                    res = generateFunctionCall(currBlock, x, y);
+                }
+                while(scanner.sym == Token.commaToken) {
+                    scanner.next();
+                    expression(currBlock);
+                }
+                if(scanner.sym == Token.closeparanToken) {
+                    scanner.next();
+                } else {
+                    error("function call missing closing paran");
+                }
+            } else {
+                error("function call missing open paran");
+            }
+        }else{
+            error("Error in funcCall");
+        }
+        
+        return res;
+    }
+    
+    private void returnStatement(BasicBlock currBlock){
+        if(scanner.sym == Token.returnToken){
+            scanner.next();
+            expression(currBlock);
+        }else{
+            error("Error in return");
+        }
     }
     
     private void varDecl(BasicBlock currBlock){
@@ -106,7 +735,7 @@ public class Parser {
             dummy1.kind = Result.Kind.CONST;
             dummy1.value = 0;
             Compute(currBlock, Token.becomesToken, dummy1, x);
-            symbolTable.put(symbolTable.size(), ident);
+            symbolTable.put(ident.name, ident);
             
             while(scanner.sym == Token.commaToken){
                 scanner.next();
@@ -120,7 +749,7 @@ public class Parser {
                 currBlock.variables.put(x.name, list2);
                 Compute(currBlock, Token.becomesToken, dummy2, x);
 
-                symbolTable.put(symbolTable.size(), ident2);
+                symbolTable.put(ident2.name, ident2);
             }
             if(scanner.sym == Token.semiToken){
                 scanner.next();
@@ -169,7 +798,7 @@ public class Parser {
         return ident;
     }
     
-    private void funcDecl(BasicBlock currBlock) {
+    private void funcDecl(BasicBlock currBlock, List<BasicBlock> joinBlocks) {
         if (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
             scanner.next();
             ident();
@@ -179,7 +808,7 @@ public class Parser {
             } else {
                 error("No ; after formal paramater in function ");
             }
-            funcBody(currBlock);
+            funcBody(currBlock, joinBlocks);
             if (scanner.sym == Token.semiToken) {
                 scanner.next();
             } else {
@@ -208,14 +837,14 @@ public class Parser {
         }
     }
     
-    private void funcBody(BasicBlock currBlock) {
+    private void funcBody(BasicBlock currBlock, List<BasicBlock> joinBlocks) {
         if (scanner.sym == Token.varToken || scanner.sym == Token.arrToken) {
             varDecl(currBlock);
         }
         
         if (scanner.sym == Token.beginToken) {
             scanner.next();
-            statSequence(currBlock);
+            statSequence(currBlock, joinBlocks);
             if (scanner.sym == Token.endToken) {
                 scanner.next();
             } else {
@@ -225,540 +854,4 @@ public class Parser {
             error("No { in function body");
         }
     }
-    
-    private BasicBlock statSequence(BasicBlock currBlock) {
-        currBlock = statement(currBlock);
-        while (scanner.sym == Token.semiToken) {
-            scanner.next();
-            currBlock = statement(currBlock);
-        }
-        
-        return currBlock;
-    }
-    
-    private BasicBlock statement(BasicBlock currBlock){
-        if (scanner.sym == Token.letToken){
-            assignment(currBlock);
-        } else if (scanner.sym == Token.callToken){
-            funcCall(currBlock);
-        } else if (scanner.sym == Token.ifToken){
-            currBlock = ifStatement(currBlock);
-        } else if (scanner.sym == Token.whileToken){
-            currBlock = whileStatement(currBlock);
-        } else if (scanner.sym == Token.returnToken){
-            returnStatement(currBlock);
-        }
-        
-        return currBlock;
-    }
-
-    private void assignment(BasicBlock currBlock){
-        if(scanner.sym == Token.letToken){
-            scanner.next();
-            Result x = designator(currBlock);
-            if(scanner.sym == Token.becomesToken){
-                scanner.next();
-                Result y = expression(currBlock);
-                if (currBlock.variables.containsKey(x.name)) {
-                    currBlock.variables.get(x.name).add(_lineNum);
-                } else {
-                    List<Integer> lineNumbers = new ArrayList<Integer>();
-                    lineNumbers.add(_lineNum);
-                    currBlock.variables.put(x.name, lineNumbers);
-                }
-                Compute(currBlock, Token.becomesToken, y, x);
-
-            }else{
-                error("Assignment: designator must be followed by <-");
-            }
-        } else{
-            error("Error in assignment");
-        }
-    }
-    
-    private boolean isPredefinedFunction(Result x) {
-        return x.name.equals("OutputNum") || x.name.equals("InputNum") || x.name.equals("OutputNewLine");
-    }
-    
-    private Result generateFunctionCall(BasicBlock currBlock, Result x, Result y) {
-        Result out = new Result();
-        out.kind = Result.Kind.INSTR;
-        out.version = _lineNum;
-        if (x.name.equals("OutputNum")) {
-            Instruction instr = new Instruction();
-            instr.operation = "WRITE";
-            instr.op1 = y;
-            currBlock.instructions.put(_lineNum++, instr);
-        } else if (x.name.equals("InputNum")) {
-            Instruction instr = new Instruction();
-            instr.operation = "READ";
-            currBlock.instructions.put(_lineNum++, instr);
-        } else if (x.name.equals("OutputNewLine")) {
-            Instruction instr = new Instruction();
-            instr.operation = "WRITE NEW LINE";
-            currBlock.instructions.put(_lineNum++, instr);
-        }
-        return out;
-    }
-    
-    private Result funcCall(BasicBlock currBlock){
-        Result res = new Result();
-        if(scanner.sym == Token.callToken){
-            scanner.next();
-            Result x = ident();
-            if(scanner.sym == Token.openparanToken){
-                scanner.next();
-                Result y = expression(currBlock);
-                if (isPredefinedFunction(x)) {
-                    res = generateFunctionCall(currBlock, x, y);
-                }
-                while(scanner.sym == Token.commaToken) {
-                    scanner.next();
-                    expression(currBlock);
-                }
-                if(scanner.sym == Token.closeparanToken) {
-                    scanner.next();
-                } else {
-                    error("function call missing closing paran");
-                }
-            } else {
-                error("function call missing open paran");
-            }
-        }else{
-            error("Error in funcCall");
-        }
-        
-        return res;
-    }
-    
-    private void copyVariables(BasicBlock block1, BasicBlock block2) {
-        for (String str : block1.variables.keySet()) {
-            block2.variables.put(str, new ArrayList<Integer>(block1.variables.get(str)));
-        }
-    }
-    
-    private BasicBlock ifStatement(BasicBlock currBlock){
-        BasicBlock joinBlock = new BasicBlock();
-        joinBlock.kind = BasicBlock.Kind.JOIN;
-
-        currBlock.joinBlock = joinBlock;
-        copyVariables(currBlock, joinBlock);
-        
-        if(scanner.sym == Token.ifToken){
-            Result follow = new Result();
-            follow.fixupLocation = 0;
-            scanner.next();
-            Result x = relation(currBlock);
-            CondNegBraFwd(currBlock, x);
-            
-            if(scanner.sym == Token.thenToken){
-                scanner.next();
-
-                BasicBlock ifBlock = new BasicBlock();
-                ifBlock.kind = BasicBlock.Kind.IF;
-                currBlock.leftBlock = ifBlock;
-                copyVariables(currBlock, ifBlock);
-                
-                ifBlock = statSequence(ifBlock);
-
-                
-                if(scanner.sym == Token.elseToken){
-                    scanner.next();
-                    BasicBlock elseBlock = new BasicBlock();
-                    elseBlock.kind = BasicBlock.Kind.ELSE;
-
-                    copyVariables(currBlock, elseBlock);
-                    currBlock.rightBlock = elseBlock;
-                    UnCondBraFwd(ifBlock, follow);
-                    Fixup(currBlock, x.fixupLocation);
-                    elseBlock = statSequence(elseBlock);
-                    
-                    if(scanner.sym == Token.fiToken){
-                        scanner.next();
-                        Fixup(ifBlock, follow.fixupLocation);
-                        // Fill join block here
-                        ifBlock.rightBlock = joinBlock;
-                        elseBlock.leftBlock = joinBlock;
-                        currBlock.joinBlock = joinBlock;
-                        generatePhiFunctionsForBranching(joinBlock, ifBlock, elseBlock);
-                        return joinBlock;
-                    } else {
-                        error("If missing corresponding fi");
-                    }
-                } else {
-                    Fixup(currBlock, x.fixupLocation);
-                    if (scanner.sym == Token.fiToken) {
-                        scanner.next();
-                        ifBlock.rightBlock = joinBlock;
-                        currBlock.joinBlock = joinBlock;
-                        generatePhiFunctionsForBranching(joinBlock, ifBlock, currBlock);
-                    } 
-                }
-            } else {
-                error("No then after if");
-            }
-        } else {
-            error("Error in if statement");
-        }
-        
-        return joinBlock;
-    }
-    
-    private void generatePhiFunctionsForBranching(BasicBlock joinBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
-        Map<String, List<Integer>> leftVariables = leftBlock.variables;
-        Map<String, List<Integer>> rightVariables = rightBlock.variables;
-        
-        for (String var : leftVariables.keySet()) {
-            if (rightVariables.containsKey(var)) {
-                List<Integer> leftVersions = leftVariables.get(var);
-                List<Integer> rightVersions = rightVariables.get(var);
-                
-                int left = leftVersions.get(leftVersions.size() - 1);
-                int right = rightVersions.get(rightVersions.size() - 1);
-                
-                if (left != right) {
-                    Instruction instr = new Instruction();
-                    instr.operation = "PHI";
-                    
-                    Result op1 = new Result();
-                    op1.name = var;
-                    op1.kind = Result.Kind.VAR;
-                    op1.version = _lineNum;
-                    
-                    Result op2 = new Result();
-                    op2.name = var;
-                    op2.kind = Result.Kind.INSTR;
-                    op2.version = left;
-                    
-                    Result op3 = new Result();
-                    op3.name = var;
-                    op3.kind = Result.Kind.INSTR;
-                    op3.version = right;
-                    
-                    instr.op1 = op1;
-                    instr.op2 = op2;
-                    instr.op3 = op3;
-                    instr.instructionNumber = _lineNum;
-                    joinBlock.variables.get(var).add(_lineNum);
-                    joinBlock.instructions.put(_lineNum++, instr);
-                }
-            }
-        }
-    }
-
-    private BasicBlock whileStatement(BasicBlock currBlock){
-        BasicBlock followBlock = new BasicBlock();
-        followBlock.kind = BasicBlock.Kind.FOLLOW;
-        copyVariables(currBlock, followBlock);
-        
-        Result x = new Result();
-        Result follow = new Result();
-        follow.fixupLocation = _lineNum;
-        
-        if(scanner.sym == Token.whileToken){
-            scanner.next();
-            BasicBlock whileBlock = new BasicBlock();
-            currBlock.leftBlock = whileBlock;
-            whileBlock.kind = BasicBlock.Kind.WHILE;
-            copyVariables(currBlock, whileBlock);
-
-            x = relation(whileBlock);
-            CondNegBraFwd(whileBlock, x);
-            
-            if(scanner.sym == Token.doToken){
-                scanner.next();
-                
-                BasicBlock doBlock = new BasicBlock();
-                whileBlock.leftBlock = doBlock;
-                whileBlock.rightBlock = followBlock;
-                doBlock.leftBlock = whileBlock;
-                doBlock.kind = BasicBlock.Kind.DO;
-                copyVariables(whileBlock, doBlock);
-                
-                BasicBlock temp = new BasicBlock();
-                temp = statSequence(doBlock);
-                UnCondBraFwd(temp, follow);
-                
-                if(scanner.sym == Token.odToken) {
-                    scanner.next();
-                    Map<String, Integer> phi = generatePhiFunctionsForWhileLoop(whileBlock, whileBlock, temp);
-                    //add the final values of variables in the follow block variables
-                    updateVariables(phi, followBlock);
-                                        
-                    // make changes to the variables used in the Do Block if any of them have corresponding phi functions
-                    updateVariablesInInstructions(phi, doBlock);
-                    
-                    Fixup(whileBlock, x.fixupLocation);
-
-                } else {
-                    error("Do missing corresponding od");
-                }
-            } else {
-                error("No do following while");
-            }
-        } else {
-            error("Error in while statement");
-        }
-        
-        return followBlock;
-    }
-    
-    private void updateVariablesInInstructions(Map<String, Integer> phi, BasicBlock doBlock) {
-        Set<Integer> lineNumbers = new HashSet<Integer>();
-        lineNumbers.addAll(doBlock.instructions.keySet());
-        Map<String, Integer> newPhi = new HashMap<String, Integer>(phi);
-        
-        for (Integer line : doBlock.instructions.keySet()) {
-            Instruction currInstr = doBlock.instructions.get(line);
-            if (currInstr.operation.equals("MOV") || currInstr.operation.equals("MOVI")) {
-                changeVariableInstruction(newPhi, currInstr.op1, lineNumbers);
-            } else {
-                changeVariableInstruction(newPhi, currInstr.op1, lineNumbers);
-                changeVariableInstruction(newPhi, currInstr.op2, lineNumbers);
-            }
-            //For each operand check if the variable is in the phi - if yes, then check if the type is an instruction, if
-            // yes then update the number
-            
-        }
-    }
-    
-    private void changeVariableInstruction(Map<String, Integer> phi, Result x, Set<Integer> lineNumbers) {
-        if (x == null || x.name == null) {
-            return;
-        }
-        if (phi.containsKey(x.name) && !lineNumbers.contains(x.version)) {
-            if (x.kind == Result.Kind.INSTR) {
-                x.version = phi.get(x.name);
-            }
-        }
-    }
-    
-    private void updateVariables(Map<String, Integer> phi, BasicBlock currBlock) {
-        for (String var : phi.keySet()) {
-            if (currBlock.variables.containsKey(var)) {
-                if (currBlock.variables.get(var).get(currBlock.variables.get(var).size() - 1) != phi.get(var)) {
-                    currBlock.variables.get(var).add(phi.get(var));
-                }
-            }
-        }
-    }
-    
-    private Map<String, Integer> generatePhiFunctionsForWhileLoop(BasicBlock headerBlock, BasicBlock leftBlock, BasicBlock rightBlock) {
-        Map<String, List<Integer>> leftVariables = leftBlock.variables;
-        Map<String, List<Integer>> rightVariables = rightBlock.variables;
-        Map<String, Integer> phis = new HashMap<String, Integer>();
-        
-        for (String var : leftVariables.keySet()) {
-            if (rightVariables.containsKey(var)) {
-                List<Integer> leftVersions = leftVariables.get(var);
-                List<Integer> rightVersions = rightVariables.get(var);
-                
-                int left = leftVersions.get(leftVersions.size() - 1);
-                int right = rightVersions.get(rightVersions.size() - 1);
-                
-                if (left != right) {
-                    Instruction instr = new Instruction();
-                    instr.operation = "PHI";
-                    instr.instructionNumber = _lineNum;
-                    
-                    Result op1 = new Result();
-                    op1.name = var;
-                    op1.kind = Result.Kind.VAR;
-                    
-                    Result op3 = new Result();
-                    op3.name = var;
-                    op3.kind = Result.Kind.INSTR;
-                    op3.version = left;
-                    
-                    Result op2 = new Result();
-                    op2.name = var;
-                    op2.kind = Result.Kind.INSTR;
-                    op2.version = right;
-                    
-                    instr.op1 = op1;
-                    instr.op2 = op2;
-                    instr.op3 = op3;
-                    headerBlock.variables.get(var).add(_lineNum);
-                    phis.put(var, _lineNum);
-                    headerBlock.instructions.put(_lineNum++, instr);
-                }
-            }
-        }
-        
-        return phis;
-    }
-
-    private void returnStatement(BasicBlock currBlock){
-        if(scanner.sym == Token.returnToken){
-            scanner.next();
-            expression(currBlock);
-        }else{
-            error("Error in return");
-        }
-    }
-
-    private void error(String errorMsg){
-        scanner.error(errorMsg);
-    }
-    
-    private Result number() {
-        Result x = new Result();
-        x.kind = Result.Kind.CONST;
-        x.value = scanner.val;
-        scanner.next();
-        return x;
-    }
-    
-    private Result ident() {
-        Result x = new Result();
-        x.kind = Result.Kind.VAR;
-        x.name = scanner.name;
-        scanner.next();
-        return x;
-    }
-    
-    private Result designator(BasicBlock currBlock) {
-        Result x = ident();
-        if (currBlock.variables.containsKey(x.name)) {
-            x.version = currBlock.variables.get(x.name).get(currBlock.variables.get(x.name).size() - 1);
-        } else {
-            x.version = -1;
-        }
-        while (scanner.sym == Token.openbracketToken) {
-            scanner.next();
-            Result y = expression(currBlock);
-            if (scanner.sym == Token.closebracketToken) {
-                scanner.next();
-                // HANDLE ARRAYS
-            } else {
-                error("No ] after the expression in designator (for array)");
-            }
-        }
-        return x;
-    }
-    
-    private Result factor(BasicBlock currBlock) {
-        Result x = new Result();
-        if (scanner.sym == Token.callToken) {
-            x = funcCall(currBlock);
-        } else if (scanner.sym == Token.openparanToken) {
-            scanner.next();
-            x = expression(currBlock);
-            if (scanner.sym == Token.closeparanToken) {
-                scanner.next();
-            } else {
-                error("No closing parenthesis for factor");
-            }
-        } else if (scanner.sym == Token.numberToken) {
-            x = number();
-        } else {
-            x = designator(currBlock);
-            if (x.version == -1) {
-                error("Variable used in Factor has not been defined previously");
-            } else {
-                x.kind = Result.Kind.INSTR;
-                x.name = null;
-            }
-        }
-        return x;
-    }
-    
-    private Result term(BasicBlock currBlock) {
-        Result x = factor(currBlock);
-        while (scanner.sym == Token.timesToken || scanner.sym == Token.divToken) {
-            int op = scanner.sym;
-            scanner.next();
-            Result y = factor(currBlock);
-            Compute(currBlock, op, x, y);
-        }
-        return x;
-    }
-    
-    private Result expression(BasicBlock currBlock) {
-        Result x = term(currBlock);
-        while (scanner.sym == Token.plusToken || scanner.sym == Token.minusToken) {
-            int op = scanner.sym;
-            scanner.next();
-            Result y = term(currBlock);
-            Compute(currBlock, op, x, y);
-        }
-        return x;
-    }
-    
-    private Result relation(BasicBlock currBlock) {
-        Result x = expression(currBlock);
-        Set<Integer> relOperators = new HashSet<Integer>();
-        relOperators.add(Token.eqlToken);
-        relOperators.add(Token.neqToken);
-        relOperators.add(Token.leqToken);
-        relOperators.add(Token.lssToken); 
-        relOperators.add(Token.geqToken);
-        relOperators.add(Token.gtrToken);
-        if (relOperators.contains(scanner.sym)) {
-            int op = scanner.sym;
-            scanner.next();
-            Result y = expression(currBlock);
-            Compute(currBlock, Token.compare, x, y);
-            x.kind = Result.Kind.CONDN;
-            x.cond = op;
-        } else {
-            error("Relation has just one operand");
-        }
-        return x;
-    }
-
-    private void CondNegBraFwd(BasicBlock currBlock, Result x){
-        x.fixupLocation = _lineNum;
-        Instruction instr = new Instruction();
-        instr.kind = Instruction.Kind.BRANCH;
-        instr.instructionNumber = _lineNum;
-        instr.op1 = x;
-        instr.operation = opCode.get(negatedBranchOp.get(x.cond));
-        currBlock.instructions.put(_lineNum++, instr);
-    }
-    
-    private void UnCondBraFwd(BasicBlock currBlock, Result x){
-        Instruction instr = new Instruction();
-        instr.kind = Instruction.Kind.BRANCH;
-        instr.instructionNumber = _lineNum;
-        instr.op1 = new Result(x);
-        instr.operation = opCode.get(18);
-        currBlock.instructions.put(_lineNum++, instr);
-        x.fixupLocation = _lineNum - 1;
-    }
-    
-    private void Fixup(BasicBlock currBlock, int fixupLocation) {
-        Instruction instr = currBlock.instructions.get(fixupLocation);
-        instr.op1.fixupLocation = _lineNum;
-    }
-    
-    private void Compute(BasicBlock currBlock, int op, Result x, Result y){
-        if (x.kind == Result.Kind.CONST && y.kind == Result.Kind.CONST){
-            if(op == Token.timesToken)
-                x.value *= y.value;
-            else if(op == Token.plusToken)
-                x.value += y.value;
-            else if(op == Token.minusToken)
-                x.value -= y.value;
-            else if(op == Token.divToken)
-                x.value /= y.value;                                                 //check if division by zero needs to be checked
-        } else {
-            Map<Integer, String> opCodes;
-//            if (x.kind == Kind.CONST || y.kind == Kind.CONST) {
-//                opCodes = opCodeImm;
-//            } else {
-                opCodes = opCode;
-//            }
-            
-            Instruction instr = new Instruction();
-            instr.instructionNumber = _lineNum;
-            instr.operation = opCodes.get(op);
-            instr.op1 = new Result(x);
-            instr.op2 = y;
-            currBlock.instructions.put(_lineNum++, instr);
-            x.kind = Result.Kind.INSTR;
-            x.version = _lineNum - 1;
-        }
-    }    
-    
 }

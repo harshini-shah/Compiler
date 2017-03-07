@@ -23,4 +23,14 @@ public class BasicBlock {
         instructions = new HashMap<Integer, Instruction>();
         written = false;
     }
+    
+    public Map<Integer, Instruction> getPhiInstructions(){
+        Map<Integer, Instruction> phiInstructions = new HashMap<Integer, Instruction>();
+        for (int i : instructions.keySet()) {
+            if (instructions.get(i).kind == Instruction.Kind.PHI) {
+                phiInstructions.put(i,  instructions.get(i));
+            }
+        }
+        return phiInstructions;
+    }
 }

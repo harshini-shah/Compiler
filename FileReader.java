@@ -40,6 +40,7 @@ public class FileReader {
     		sym = _line.charAt(_index++);
     	}else{
     		sym = Token.eofToken;
+    		_sc.close();
     	}
     }
     
