@@ -1,3 +1,5 @@
+import java.util.List;
+
 public class Result{
         public Kind kind;
         public int value;
@@ -5,9 +7,10 @@ public class Result{
         public int cond;
         public int fixupLocation;
         public int version;
+        public List<Result> dimensions;
         
         public enum Kind{
-            CONST, VAR, CONDN, INSTR
+            CONST, VAR, CONDN, INSTR, ARR
         }
         
         public Result() {   

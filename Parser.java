@@ -142,9 +142,10 @@ public class Parser {
         while (scanner.sym == Token.openbracketToken) {
             scanner.next();
             Result y = expression(currBlock);
+            x.kind = Result.Kind.ARR;
             if (scanner.sym == Token.closebracketToken) {
                 scanner.next();
-                // HANDLE ARRAYS
+                x.dimensions.add(y);
             } else {
                 error("No ] after the expression in designator (for array)");
             }
@@ -326,6 +327,13 @@ public class Parser {
      * If the finalElseBlock exists: (same as elseBlock if no nesting within the else statements, different otherwise)
      * - finalElseBlock.leftBlock --> joinBlock
      * 
+     * The parent links are set as:
+     * - ifBlock.rightParent --> currBlock
+     * - elseBlock.leftParent --> currBlock
+     * - joinBlock.joinParent --> currBlock
+     * - joinBlock.leftParent --> ifBlock
+     * - joinBlock.rightParent --> elseBlock
+     * 
      * In case of nesting loops, every variable that has some phi condition anywhere within any of the nested loops 
      * in the if/else blocks generate a phi function in the current join block.
      * 
@@ -337,6 +345,7 @@ public class Parser {
         joinBlock.kind = BasicBlock.Kind.JOIN;
 
         currBlock.joinBlock = joinBlock;
+        joinBlock.joinParent = currBlock;
         copyVariables(currBlock, joinBlock);
         
         if(scanner.sym == Token.ifToken){
@@ -352,6 +361,8 @@ public class Parser {
                 BasicBlock ifBlock = new BasicBlock();
                 ifBlock.kind = BasicBlock.Kind.IF;
                 currBlock.leftBlock = ifBlock;
+                ifBlock.rightParent = currBlock;
+                joinBlock.leftParent = ifBlock;
                 copyVariables(currBlock, ifBlock);
                 
                 if (joinBlocks == null) {
@@ -360,6 +371,8 @@ public class Parser {
                 
                 BasicBlock finalIfBlock = statSequence(ifBlock, joinBlocks);
                 joinBlocks.add(0, ifBlock);
+                joinBlocks.add(0, joinBlock);
+
                 
                 if(scanner.sym == Token.elseToken){
                     scanner.next();
@@ -367,13 +380,16 @@ public class Parser {
                     elseBlock.kind = BasicBlock.Kind.ELSE;
                     copyVariables(currBlock, elseBlock);
                     currBlock.rightBlock = elseBlock;
+                    elseBlock.leftParent = currBlock;
+                    joinBlock.rightParent = elseBlock;
                     
                     UnCondBraFwd(finalIfBlock, follow);
                     Fixup(currBlock, x.fixupLocation);
                     
                     BasicBlock finalElseBlock = statSequence(elseBlock, joinBlocks);
                     joinBlocks.add(0, elseBlock);
-                                        
+
+      
                     if(scanner.sym == Token.fiToken){
                         scanner.next();
                         Fixup(finalIfBlock, follow.fixupLocation);
@@ -388,13 +404,15 @@ public class Parser {
                         
                         // Update variable version numbers in join block
                         updateVariables(joinBlock, joinBlock);
-                        joinBlocks.add(0, joinBlock);
+//                        joinBlocks.add(joinBlock);
 
                     } else {
                         error("If missing corresponding fi");
                     }
                 } else {
                     Fixup(currBlock, x.fixupLocation);
+                    joinBlocks.add(0, ifBlock);
+
                     if (scanner.sym == Token.fiToken) {
                         scanner.next();
                         finalIfBlock.rightBlock = joinBlock;
@@ -404,6 +422,8 @@ public class Parser {
                         
                         // Update variable versions in join block
                         updateVariables(joinBlock, joinBlock);
+
+                        joinBlocks.add(joinBlock);
                     } 
                 }
             } else {
@@ -522,26 +542,35 @@ public class Parser {
     private void updateVariablesToPhiValues(BasicBlock currBlock, Map<Integer, Integer> mappings) {
         Map<Integer, Instruction> phiInstructions = currBlock.getPhiInstructions();
         
-        for (Instruction instr : phiInstructions.values()) {
-            if (instr.kind == Instruction.Kind.PHI) {
-                if (mappings.containsKey(instr.op3.version)) {
-                    instr.op3.version = mappings.get(instr.op3.version);
-                }
-                
-                if (mappings.containsKey(instr.op2.version)) {
-                    instr.op2.version = mappings.get(instr.op2.version);
-                }
+        for (Instruction instr : phiInstructions.values()) {                
+            if (mappings.containsKey(instr.instructionNumber)) {
+                mappings.remove(instr.instructionNumber);
+            }
+            if (mappings.containsKey(instr.op3.version)) {
+                instr.op3.version = mappings.get(instr.op3.version);
+            }
+            
+            if (mappings.containsKey(instr.op2.version)) {
+                instr.op2.version = mappings.get(instr.op2.version);
             }
         }
               
         for (Instruction instr : phiInstructions.values()) {
             if (!mappings.containsKey(instr.op2.version)) {
                 mappings.put(instr.op2.version, instr.instructionNumber);
-            }  
+            }
+            
+            if (!mappings.containsKey(instr.op3.version)) {
+                mappings.put(instr.op3.version, instr.instructionNumber);
+            }
         }
         
         for (Instruction instr : currBlock.instructions.values()) {
             if (instr.kind == Instruction.Kind.STD) {
+                
+                if (mappings.containsKey(instr.instructionNumber)) {
+                    mappings.remove(instr.instructionNumber);
+                }
                 if (mappings.containsKey(instr.op1.version)) {
                     instr.op1.version = mappings.get(instr.op1.version);
                 }
@@ -554,7 +583,15 @@ public class Parser {
     }
     
     /*
-     * 
+     * currBlock.leftBlock --> whileBlock
+     * whileBlock.rightParent --> currBlock
+     * whileBlock.leftBlock --> doBlock
+     * whileBlock.rightBlock --> followBlock
+     * followBlock.leftParent --> whileBlock
+     * whileBlock.joinParent = whileBlock
+     * whileBlock.joinBlock = whileBlock
+     * doBlock.leftBlock = whileBlock
+     * doBlock.rightParent = whileBlock
      */
     private BasicBlock whileStatement(BasicBlock currBlock, List<BasicBlock> joinBlocks){
         BasicBlock followBlock = new BasicBlock();
@@ -569,6 +606,7 @@ public class Parser {
             scanner.next();
             BasicBlock whileBlock = new BasicBlock();
             currBlock.leftBlock = whileBlock;
+            whileBlock.rightParent = currBlock; 
             whileBlock.kind = BasicBlock.Kind.WHILE;
             copyVariables(currBlock, whileBlock);
 
@@ -581,7 +619,12 @@ public class Parser {
                 BasicBlock doBlock = new BasicBlock();
                 whileBlock.leftBlock = doBlock;
                 whileBlock.rightBlock = followBlock;
+                followBlock.leftParent = whileBlock;
+                whileBlock.joinParent = whileBlock;
+                whileBlock.joinBlock = whileBlock;
+                
                 doBlock.leftBlock = whileBlock;
+                doBlock.rightParent = whileBlock;
                 doBlock.kind = BasicBlock.Kind.DO;
                 copyVariables(whileBlock, doBlock);
                 
@@ -590,6 +633,7 @@ public class Parser {
                 }
                 
                 BasicBlock lastDoBlock = statSequence(doBlock, joinBlocks);
+                joinBlocks.add(0, followBlock);
                 joinBlocks.add(0, doBlock);
                 joinBlocks.add(0, whileBlock);
                 
@@ -608,12 +652,30 @@ public class Parser {
                     // make changes to the variables used in the Do Block and the While block too 
                     // if any of them have corresponding phi functions
                     Map<Integer, Integer> mappings = new HashMap<Integer, Integer>();
-                    for (BasicBlock joinBlock : joinBlocks) {
-                        updateVariablesToPhiValues(joinBlock, mappings);
-                    }
+                    Set<BasicBlock> bb = new HashSet<BasicBlock>();
+                    update(whileBlock, bb, mappings);
+                    //bb.add(whileBlock);
+                    
+                    
+//                    System.out.println("One time ");
+//                    for (BasicBlock joinBlock : joinBlocks) {
+//                        updateVariablesToPhiValues(joinBlock, mappings);
+//                        System.out.println(joinBlock.kind);
+//                        if (joinBlock.instructions.keySet().iterator().hasNext()) {
+//                            int a = joinBlock.instructions.keySet().iterator().next();
+//                            System.out.println(" line - " + a);
+//                        }
+//                        
+//                        for (int key : mappings.keySet()) {
+//                            System.out.println(key + " --> " + mappings.get(key));
+//                        }
+//                        
+//                    }
+                    
+                    
                     
                     Fixup(whileBlock, x.fixupLocation);
-
+                    
                 } else {
                     error("Do missing corresponding od");
                 }
@@ -625,6 +687,18 @@ public class Parser {
         }
         
         return followBlock;
+    }
+    
+    private void update (BasicBlock block, Set<BasicBlock> set, Map<Integer, Integer> map) {
+        if (block == null || set.contains(block)) {
+            return;
+        }
+        
+        updateVariablesToPhiValues(block, map);
+        set.add(block);
+        update(block.leftBlock, set, new HashMap<Integer, Integer>(map));
+        update(block.rightBlock, set, new HashMap<Integer, Integer>(map));
+        update(block.joinBlock, set, new HashMap<Integer, Integer>(map));
     }
     
     ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -725,45 +799,60 @@ public class Parser {
     
     private void varDecl(BasicBlock currBlock){
         Identifier ident = typeDecl();
+        
         if(scanner.sym == Token.identToken){
             Result x = ident();
-            ident.name = x.name;
-            List<Integer> list = new ArrayList<Integer>();
-            list.add(_lineNum);
-            currBlock.variables.put(x.name, list);
-            Result dummy1 = new Result();
-            dummy1.kind = Result.Kind.CONST;
-            dummy1.value = 0;
-            Compute(currBlock, Token.becomesToken, dummy1, x);
-            symbolTable.put(ident.name, ident);
             
+            if (ident.type == Identifier.Type.VAR) {
+                Result dummy1 = new Result();
+                dummy1.kind = Result.Kind.CONST;
+                dummy1.value = 0;
+                List<Integer> list = new ArrayList<Integer>();
+                list.add(_lineNum);
+                currBlock.variables.put(x.name, list);
+                Compute(currBlock, Token.becomesToken, dummy1, x);
+            } else if (ident.type == Identifier.Type.ARR) {
+                Instruction instr = new Instruction();
+                instr.operation =  "ARR " + ident.name + " defined";
+                currBlock.instructions.put(_lineNum++, instr);
+                symbolTable.put(ident.name, ident);
+            }
+              
             while(scanner.sym == Token.commaToken){
                 scanner.next();
                 x = ident();
                 Identifier ident2 = new Identifier(ident);
-                Result dummy2 = new Result();
-                dummy2.kind = Result.Kind.CONST;
-                dummy2.value = 0;
-                List<Integer> list2 = new ArrayList<Integer>();
-                list2.add(_lineNum);
-                currBlock.variables.put(x.name, list2);
-                Compute(currBlock, Token.becomesToken, dummy2, x);
-
-                symbolTable.put(ident2.name, ident2);
+ 
+                if (ident2.type == Identifier.Type.VAR) {
+                    Result dummy1 = new Result();
+                    dummy1.kind = Result.Kind.CONST;
+                    dummy1.value = 0;
+                    List<Integer> list2 = new ArrayList<Integer>();
+                    list2.add(_lineNum);
+                    currBlock.variables.put(x.name, list2);
+                    Compute(currBlock, Token.becomesToken, dummy1, x);
+                } else if (ident2.type == Identifier.Type.ARR) {
+                    Instruction instr2 = new Instruction();
+                    instr2.operation =  "ARR " + ident.name + " defined";
+                    currBlock.instructions.put(_lineNum++, instr2);
+                    symbolTable.put(ident2.name, ident2);
+                }
             }
             if(scanner.sym == Token.semiToken){
                 scanner.next();
             }else{
                 error("Missing ; in varDecl");
             }
-        }else{
-            error("var isn't followed by identifier");
+        } else {
+            error("var declaration isn't followed by identifier");
         }
     }
     
     private Identifier typeDecl(){
-        Identifier ident = new Identifier(Identifier.Type.VAR, "", symbolTable.size());;
+        Identifier ident = new Identifier();
+
         if (scanner.sym == Token.varToken){
+            ident.type = Identifier.Type.VAR;
             scanner.next();
         } else if (scanner.sym == Token.arrToken){
             scanner.next();

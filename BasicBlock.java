@@ -7,6 +7,9 @@ public class BasicBlock {
     public BasicBlock joinBlock;
     public BasicBlock leftBlock;
     public BasicBlock rightBlock;
+    public BasicBlock joinParent;
+    public BasicBlock leftParent;
+    public BasicBlock rightParent;
     public Map<Integer, Instruction> instructions;
     boolean written;
     
@@ -19,6 +22,9 @@ public class BasicBlock {
         leftBlock = null;
         rightBlock = null;
         joinBlock = null;
+        leftParent = null;
+        rightParent = null;
+        joinParent = null;
         variables = new HashMap<String, List<Integer>>();
         instructions = new HashMap<Integer, Instruction>();
         written = false;
