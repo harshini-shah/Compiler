@@ -1,6 +1,8 @@
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class BasicBlock {
     public Map<String, List<Integer>> variables;
@@ -12,6 +14,7 @@ public class BasicBlock {
     public BasicBlock rightParent;
     public Map<Integer, Instruction> instructions;
     boolean written;
+    public Set<String> arrNames;
     
     public enum Kind {STD, IF, ELSE, WHILE, JOIN, FOLLOW, DO}
     
@@ -28,6 +31,7 @@ public class BasicBlock {
         variables = new HashMap<String, List<Integer>>();
         instructions = new HashMap<Integer, Instruction>();
         written = false;
+        arrNames = new HashSet<String>();
     }
     
     public Map<Integer, Instruction> getPhiInstructions(){

@@ -28,6 +28,8 @@ public class OpCode {
             return "BLE";
         case Token.gtrToken: 
             return "BGT";
+        case Token.addaToken:
+            return "ADDA";
         }
         
         return "";

@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.List;
 
 public class Result{
@@ -13,7 +14,8 @@ public class Result{
             CONST, VAR, CONDN, INSTR, ARR
         }
         
-        public Result() {   
+        public Result() {  
+            dimensions = new ArrayList<Result>();
         }
         
         public Result(Result x) {
@@ -23,5 +25,7 @@ public class Result{
             this.name = x.name;
             this.cond = x.cond;
             this.version = x.version;
+            dimensions = new ArrayList<Result>(x.dimensions);
+
         }
     }

@@ -27,7 +27,7 @@ public class Identifier{
 //    
     
     public Identifier() {
-        
+        this.dimensions = new ArrayList<Integer>();
     }
     
     public Identifier(Identifier ident){
@@ -35,9 +35,9 @@ public class Identifier{
         this.name = ident.name;
         this.type = ident.type;
         
-        if(type == Type.ARR){
+//        if(type == Type.ARR){
             this.dimensions = new ArrayList<Integer>(ident.dimensions);
-        }
+//        }
         
 //        if(type == Type.FUNC){
 //            this.params = new LinkedList<Identifier>(ident.params);

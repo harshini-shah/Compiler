@@ -3,6 +3,7 @@ public class Token {
     public static final int errorToken = 0;
     public static final int timesToken = 1;
     public static final int divToken = 2;
+    public static final int addaToken = 10;
     public static final int plusToken = 11;
     public static final int minusToken = 12;
     public static final int branchToken = 18;

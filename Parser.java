@@ -61,7 +61,7 @@ public class Parser {
                     varDecl(currBlock);
                 }
                 while (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
-                    funcDecl(currBlock, null);
+                    funcDecl();
                 }
                 if (scanner.sym == Token.beginToken) {
                     scanner.next();
@@ -150,8 +150,67 @@ public class Parser {
                 error("No ] after the expression in designator (for array)");
             }
         }
+        
+        if (x.kind == Result.Kind.ARR) {
+            Result dummy = new Result();
+            dummy.kind = Result.Kind.CONST;
+            dummy.value = 4;
+            
+            List<Integer> dimensions = symbolTable.get(x.name).dimensions; 
+            int offset = 0;
+            int nDims = dimensions.size();
+            
+            int total = 1;
+            for (int j = 1; j < nDims; j++) {
+                total *= dimensions.get(j); 
+            }
+            
+//            for (int i = 0; i < x.dimensions.size(); i++) {
+//                offset += total*x.dimensions.get(i);
+//                
+//                
+//            }
+            Compute(currBlock, Token.timesToken, x.dimensions.get(0), dummy);
+            generateAddressInstruction(currBlock, x, Token.plusToken);
+            Compute(currBlock, Token.addaToken, x, new Result(x.dimensions.get(0)));
+//            if (x.dimensions.size() == 1) {
+//                Compute(currBlock, Token.timesToken, x.dimensions.get(0), dummy);
+//                generateAddressInstruction(currBlock, x, Token.plusToken);
+//                Compute(currBlock, Token.addaToken, x, new Result(x.dimensions.get(0)));
+//            } else if (x.dimensions.size() == 2) {
+//                
+//            } else if (x.dimensions.size() == 3) {
+//                
+//            } else {
+//                
+//            }
+            
+        }
         return x;
     }
+    
+    private void generateAddressInstruction(BasicBlock currBlock, Result x, int op) {
+        if (x.kind != Result.Kind.ARR) {
+            System.out.println("ERROR : Request to generate address instruction for non-array");
+            return;
+        }
+        
+        Instruction instr = new Instruction();
+        instr.instructionNumber = _lineNum;
+        instr.operation = OpCode.get(op);
+        instr.op1 = new Result();
+        instr.op1.kind = Result.Kind.VAR;
+        instr.op1.name = "FP";
+        instr.op2 = new Result();
+        instr.op2.kind = Result.Kind.VAR;
+        instr.op2.name = x.name + "_BaseAddress";
+        currBlock.instructions.put(_lineNum++, instr);
+        x.kind = Result.Kind.INSTR;
+        x.name = null;
+        x.value = 0;
+        x.version = _lineNum - 1;
+    }
+    
     
     /*
      * Creates a Result - there are four cases:
@@ -268,6 +327,10 @@ public class Parser {
     private void copyVariables(BasicBlock block1, BasicBlock block2) {
         for (String str : block1.variables.keySet()) {
             block2.variables.put(str, new ArrayList<Integer>(block1.variables.get(str)));
+        }
+        
+        for (String str : block1.arrNames) {
+            block2.arrNames.add(str);
         }
     }
     
@@ -442,7 +505,9 @@ public class Parser {
     private void updateVariables(BasicBlock phiBlock, BasicBlock updateBlock) {
         Map<Integer, Instruction> phiInstructions = phiBlock.getPhiInstructions();
         for (Instruction instr : phiInstructions.values()) {
+//            System.out.println(instr.op2.name);
             String var = instr.op1.name;
+//            System.out.println(var);
             updateBlock.variables.get(var).add(instr.instructionNumber);
         }
     }
@@ -490,8 +555,17 @@ public class Parser {
         Map<String, List<Integer>> leftVariables = leftBlock.variables;
         Map<String, List<Integer>> rightVariables = rightBlock.variables;
         
+        for (String str : leftBlock.arrNames) {
+            System.out.println(str);
+        }
         for (String var : leftVariables.keySet()) {
+            System.out.println("variable before checking " + var);
+            if (leftBlock.arrNames.contains(var) || var == null) {
+                continue;
+            }
+            System.out.println("after checking " + var);
             if (rightVariables.containsKey(var)) {
+                
                 List<Integer> leftVersions = leftVariables.get(var);
                 List<Integer> rightVersions = rightVariables.get(var);
                 
@@ -499,6 +573,8 @@ public class Parser {
                 int right = rightVersions.get(rightVersions.size() - 1);
                 
                 if (left != right) {
+                    System.out.println("PHI Generated for " + var);
+
                     Instruction instr = new Instruction();
                     instr.kind = Instruction.Kind.PHI;
                     instr.operation = "PHI";
@@ -713,9 +789,12 @@ public class Parser {
                 if (currBlock.variables.containsKey(x.name)) {
                     currBlock.variables.get(x.name).add(_lineNum);
                 } else {
-                    List<Integer> lineNumbers = new ArrayList<Integer>();
-                    lineNumbers.add(_lineNum);
-                    currBlock.variables.put(x.name, lineNumbers);
+                    if (!currBlock.arrNames.contains(x.name)){
+                        List<Integer> lineNumbers = new ArrayList<Integer>();
+                        lineNumbers.add(_lineNum);
+                        currBlock.variables.put(x.name, lineNumbers);
+                    }
+                    
                 }
                 Compute(currBlock, Token.becomesToken, y, x);
 
@@ -760,20 +839,20 @@ public class Parser {
     
     private Result funcCall(BasicBlock currBlock){
         Result res = new Result();
-        if(scanner.sym == Token.callToken){
+        if (scanner.sym == Token.callToken) {
             scanner.next();
             Result x = ident();
-            if(scanner.sym == Token.openparanToken){
+            if (scanner.sym == Token.openparanToken) {
                 scanner.next();
                 Result y = expression(currBlock);
                 if (isPredefinedFunction(x)) {
                     res = generateFunctionCall(currBlock, x, y);
                 }
-                while(scanner.sym == Token.commaToken) {
+                while (scanner.sym == Token.commaToken) {
                     scanner.next();
                     expression(currBlock);
                 }
-                if(scanner.sym == Token.closeparanToken) {
+                if (scanner.sym == Token.closeparanToken) {
                     scanner.next();
                 } else {
                     error("function call missing closing paran");
@@ -781,20 +860,23 @@ public class Parser {
             } else {
                 error("function call missing open paran");
             }
-        }else{
+        } else {
             error("Error in funcCall");
         }
         
         return res;
     }
     
-    private void returnStatement(BasicBlock currBlock){
+    private Result returnStatement(BasicBlock currBlock){
+        Result x = null;
         if(scanner.sym == Token.returnToken){
             scanner.next();
-            expression(currBlock);
-        }else{
+            x = expression(currBlock);
+        } else {
             error("Error in return");
         }
+        
+        return x;
     }
     
     private void varDecl(BasicBlock currBlock){
@@ -812,9 +894,13 @@ public class Parser {
                 currBlock.variables.put(x.name, list);
                 Compute(currBlock, Token.becomesToken, dummy1, x);
             } else if (ident.type == Identifier.Type.ARR) {
+               currBlock.arrNames.add(x.name);
                 Instruction instr = new Instruction();
-                instr.operation =  "ARR " + ident.name + " defined";
+                instr.operation =  "ARR " + x.name + " defined";
                 currBlock.instructions.put(_lineNum++, instr);
+                List<Integer> list = new ArrayList<Integer>();
+                list.add(-1);
+                currBlock.variables.put(x.name, list);
                 symbolTable.put(ident.name, ident);
             }
               
@@ -832,9 +918,13 @@ public class Parser {
                     currBlock.variables.put(x.name, list2);
                     Compute(currBlock, Token.becomesToken, dummy1, x);
                 } else if (ident2.type == Identifier.Type.ARR) {
+                    currBlock.arrNames.add(x.name);
                     Instruction instr2 = new Instruction();
-                    instr2.operation =  "ARR " + ident.name + " defined";
+                    instr2.operation =  "ARR " + x.name + " defined";
                     currBlock.instructions.put(_lineNum++, instr2);
+                    List<Integer> list2 = new ArrayList<Integer>();
+                    list2.add(-1);
+                    currBlock.variables.put(x.name, list2);
                     symbolTable.put(ident2.name, ident2);
                 }
             }
@@ -860,6 +950,9 @@ public class Parser {
             if (scanner.sym == Token.openbracketToken){
                 scanner.next();
                 Result x = number();
+//                System.out.println(x.kind);
+//                System.out.println(x.value);
+//                System.out.println(ident.dimensions);
                 ident.dimensions.add(x.value);
                 if (scanner.sym == Token.closebracketToken){
                     scanner.next();
@@ -887,40 +980,87 @@ public class Parser {
         return ident;
     }
     
-    private void funcDecl(BasicBlock currBlock, List<BasicBlock> joinBlocks) {
+    private void funcDecl() {
         if (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
             scanner.next();
-            ident();
-            formalParam();
+            Result func = ident();
+            
+            // Creating a new CFG for the new function 
+            CFG newFunction = new CFG();
+            newFunction.functionName = func.name;
+            newFunction.startBlock = new BasicBlock();
+            functionCFGs.add(newFunction);
+            
+            // Setting the current block to be the start block of this function 
+            BasicBlock currBlock = newFunction.startBlock;
+            
+            
+            formalParam(currBlock, newFunction);
+            
             if (scanner.sym == Token.semiToken) {
                 scanner.next();
+                
+                funcBody(currBlock, null);
+                if (scanner.sym == Token.semiToken) {
+                    scanner.next();
+                } else {
+                    error("No ; after function body in function declaration");
+                }
             } else {
                 error("No ; after formal paramater in function ");
-            }
-            funcBody(currBlock, joinBlocks);
-            if (scanner.sym == Token.semiToken) {
-                scanner.next();
-            } else {
-                error("No ; after function body in function declaration");
-            }
+            }  
         } else {
             error("No function or procedure declaration in function declaration");
         }
     }
     
-    private void formalParam() {
+    // No arrays allowed - only simple variables
+    private void formalParam(BasicBlock currBlock, CFG function) {
         if (scanner.sym == Token.openparanToken) {
             scanner.next();
-            ident();
-            while (scanner.sym == Token.commaToken) {
-                scanner.next();
-                ident();
-            }
+            
             if (scanner.sym == Token.closeparanToken) {
                 scanner.next();
             } else {
-                error("No ) after formalParam");
+                Result x = ident();
+                Identifier ident = new Identifier();
+                ident.type = Identifier.Type.VAR;
+                ident.name = x.name;
+                
+                function.argumentList.add(ident);
+                
+                Result dummy = new Result();
+                dummy.kind = Result.Kind.CONST;
+                dummy.value = 0;
+                List<Integer> list = new ArrayList<Integer>();
+                list.add(_lineNum);
+                currBlock.variables.put(x.name, list);
+                Compute(currBlock, Token.becomesToken, dummy, x);
+                
+                while (scanner.sym == Token.commaToken) {
+                    scanner.next();
+                    Result x1 = ident();
+                    Identifier ident1 = new Identifier();
+                    ident.type = Identifier.Type.VAR;
+                    ident.name = x1.name;
+                    
+                    function.argumentList.add(ident1);
+                    
+                    Result dummy1 = new Result();
+                    dummy1.kind = Result.Kind.CONST;
+                    dummy1.value = 0;
+                    List<Integer> list1 = new ArrayList<Integer>();
+                    list.add(_lineNum);
+                    currBlock.variables.put(x1.name, list1);
+                    Compute(currBlock, Token.becomesToken, dummy1, x1);
+                }
+                if (scanner.sym == Token.closeparanToken) {
+                    scanner.next();
+                } else {
+                    error("No ) after formalParam");
+                }
             }
+            
         } else {
             error("No opening ( in formalParam");
         }
