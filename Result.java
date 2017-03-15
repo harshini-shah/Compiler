@@ -1,26 +1,32 @@
+import java.util.ArrayList;
+import java.util.List;
+
 public class Result{
         public Kind kind;
         public int value;
-        //public int id;
         public String name;
         public int cond;
         public int fixupLocation;
         public int version;
+        public List<Result> dimensions;
         
-        public Result() {   
-        }
         public enum Kind{
-            CONST, VAR, CONDN, INSTR
+            CONST, VAR, CONDN, INSTR, ARR
+        }
+        
+        public Result() {  
+            dimensions = new ArrayList<Result>();
         }
         
         public Result(Result x) {
             this.kind = x.kind;
             this.value = x.value;
             this.fixupLocation = x.fixupLocation;
-            //this.id = x.id;
             this.name = x.name;
             this.cond = x.cond;
             this.version = x.version;
+            dimensions = new ArrayList<Result>(x.dimensions);
+
         }
         
         @Override

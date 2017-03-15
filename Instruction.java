@@ -1,7 +1,7 @@
 
 public class Instruction {
     public enum Kind {
-        BRANCH, STD, END, PHI
+        BRANCH, STD, END, PHI, FUNC
     };
 
     public Kind kind;
