@@ -28,4 +28,27 @@ public class Result{
             dimensions = new ArrayList<Result>(x.dimensions);
 
         }
+        
+        @Override
+    	public int hashCode(){
+        	int returnValue = this.kind.hashCode();
+        	if(this.kind == Kind.CONST)
+        		returnValue += this.value;
+        	else if(this.kind == Kind.INSTR)
+        		returnValue += this.version;
+        	return returnValue;
+        }
+        
+        @Override
+        public boolean equals(Object o){
+        	if(o==null || !(o instanceof Result))
+        		return false;
+        	Result r = (Result) o;
+        	boolean returnValue = false;
+        	if(this.kind == Kind.INSTR && this.kind == r.kind && this.version == r.version)
+        		returnValue = true;
+        	else if(this.kind == Kind.CONST && this.kind == r.kind && this.value == r.value)
+        		returnValue = true;
+        	return returnValue;
+        }
     }

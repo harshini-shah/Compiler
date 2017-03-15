@@ -9,13 +9,15 @@ public class Instruction {
     public Result op1;
     public Result op2;
     public Result op3;
-    int instructionNumber;
-
+    public int instructionNumber;
+    public boolean isDeleted;
+    
     public Instruction() {
         kind = Kind.STD;
         op1 = null;
         op2 = null;
         op3 = null;
+        isDeleted = false;
     }
 
     @ Override
@@ -59,5 +61,13 @@ public class Instruction {
         }
 
         return sb.toString();
+    }
+    
+    public boolean isExpression(){
+    	return isCommutativeExpression() || this.operation.equals("SUB") || this.operation.equals("DIV");
+    }
+    
+    public boolean isCommutativeExpression(){
+    	return this.operation.equals("ADD") || this.operation.equals("MUL");
     }
 }
