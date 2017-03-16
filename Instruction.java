@@ -1,3 +1,5 @@
+import java.util.HashMap;
+import java.util.Map;
 
 public class Instruction {
     public enum Kind {
@@ -11,6 +13,7 @@ public class Instruction {
     public Result op3;
     public int instructionNumber;
     public boolean isDeleted;
+    public static Map<Integer, Instruction> allInstructions = new HashMap<Integer, Instruction>();
     
     public Instruction() {
         kind = Kind.STD;
@@ -69,5 +72,9 @@ public class Instruction {
     
     public boolean isCommutativeExpression(){
     	return this.operation.equals("ADD") || this.operation.equals("MUL");
+    }
+    
+    public boolean isAssignmentInstruction(){
+    	return this.operation.equals("MOV");
     }
 }

@@ -1,4 +1,6 @@
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 public class VisualizeCFG {
     private BasicBlock startBlock;
@@ -27,9 +29,11 @@ public class VisualizeCFG {
         }
         
         System.out.println("BASIC BLOCK: " + num++ + "(" + block.kind + ")");
-        Set<Integer> set = block.instructions.keySet();
-        for (int lineNumber : set) {
-            System.out.println(lineNumber + "\t" + block.instructions.get(lineNumber).toString());
+//        Set<Integer> set = block.instructions.keySet();
+        Map<Integer, Instruction> blockInstructionsSorted = new TreeMap<Integer, Instruction>(block.instructions); 
+        for (Map.Entry<Integer, Instruction> ent : blockInstructionsSorted.entrySet()) {
+        	if(!ent.getValue().isDeleted)
+        		System.out.println(ent.getKey() + "\t" + ent.getValue().toString());
         }
         System.out.println();
     }

@@ -1,10 +1,10 @@
 import java.util.HashSet;
 
 public class DominatorTree {
-	public static DominatorTreeNode root;
+	public DominatorTreeNode root;
 	
-	public DominatorTree(){
-		root = new DominatorTreeNode(CFG.startBlock);
+	public DominatorTree(CFG cfg){
+		root = new DominatorTreeNode(cfg.startBlock);
 	}
 	
 	public void constructDT(){

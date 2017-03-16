@@ -1,11 +1,15 @@
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 public class BasicBlock {
     public Map<String, List<Integer>> variables;
+    public int blockId;
     public BasicBlock joinBlock;
     public BasicBlock leftBlock;
     public BasicBlock rightBlock;
@@ -20,7 +24,7 @@ public class BasicBlock {
     
     Kind kind;
     
-    public BasicBlock() {
+    public BasicBlock(int blockNum) {
         kind = Kind.STD;
         leftBlock = null;
         rightBlock = null;
@@ -32,15 +36,50 @@ public class BasicBlock {
         instructions = new HashMap<Integer, Instruction>();
         written = false;
         arrNames = new HashSet<String>();
+        blockId =blockNum;
     }
     
     public Map<Integer, Instruction> getPhiInstructions(){
         Map<Integer, Instruction> phiInstructions = new HashMap<Integer, Instruction>();
-        for (int i : instructions.keySet()) {
-            if (instructions.get(i).kind == Instruction.Kind.PHI) {
-                phiInstructions.put(i,  instructions.get(i));
+        for (Map.Entry<Integer, Instruction> ent : instructions.entrySet()) {
+            if (ent.getValue().kind == Instruction.Kind.PHI) {
+                phiInstructions.put(ent.getKey(),  ent.getValue());
             }
         }
         return phiInstructions;
+    }
+    
+    public List<Instruction> getOrderedInstructions(){
+    	List<Instruction> orderedInstructions = new ArrayList<Instruction>();
+    	Map<Integer, Instruction> blockInstructionsSorted = new TreeMap<Integer, Instruction>(instructions); 
+    	for (Instruction instr: blockInstructionsSorted.values()) {
+            if (instr.kind == Instruction.Kind.PHI) {
+            	orderedInstructions.add(instr);
+            }
+        }
+    	for(Instruction instr : blockInstructionsSorted.values()){
+    		if(instr.kind != Instruction.Kind.PHI){
+    			orderedInstructions.add(instr);
+    		}
+    	}
+    	return orderedInstructions;
+    }
+    
+    public List<Instruction> getReverseOrderedInstructions(){
+    	List<Instruction> orderedInstructions = new ArrayList<Instruction>();
+    	Map<Integer, Instruction> blockInstructionsReverse = new TreeMap<Integer,Instruction>(Collections.reverseOrder());
+    	blockInstructionsReverse.putAll(instructions);
+    	for(Instruction instr : blockInstructionsReverse.values()){
+    		if(instr.kind != Instruction.Kind.PHI){
+    			orderedInstructions.add(instr);
+    		}
+    	}
+    	for (Instruction instr: blockInstructionsReverse.values()) {
+            if (instr.kind == Instruction.Kind.PHI) {
+            	orderedInstructions.add(instr);
+            }
+        }
+    	
+    	return orderedInstructions;
     }
 }

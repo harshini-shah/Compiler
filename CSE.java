@@ -1,4 +1,7 @@
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class CSE {
 	
@@ -11,8 +14,8 @@ public class CSE {
 	public void performCSE(DominatorTreeNode root, HashMap<Integer, Integer> replaceWith, HashMap<String, HashMap<ExpressionOperands, Integer>> anchor){
 		if(root == null)
 			return;
-		
-		for(Instruction instr : root.getBlock().instructions.values()){
+		List<Instruction> blockInstructionsSorted = root.getBlock().getOrderedInstructions();
+		for(Instruction instr : blockInstructionsSorted){
 			if(!instr.isDeleted){
 				if(instr.op1 != null && instr.op1.kind == Result.Kind.INSTR && replaceWith.containsKey(instr.op1.version)){
 					instr.op1.version = replaceWith.get(instr.op1.version);
@@ -49,7 +52,16 @@ public class CSE {
 		
 		
 		for(DominatorTreeNode child : root.getChildren()){
-			performCSE(child, new HashMap<Integer, Integer>(replaceWith), new HashMap<String, HashMap<ExpressionOperands, Integer>>(anchor));
+			HashMap<String, HashMap<ExpressionOperands, Integer>> anch = new HashMap<String, HashMap<ExpressionOperands, Integer>>();
+			populate(anch, anchor);
+			performCSE(child, replaceWith, anch);
+			
+		}
+	}
+	
+	void populate(Map<String, HashMap<ExpressionOperands, Integer>> anch, Map<String, HashMap<ExpressionOperands, Integer>> anchor){
+		for (String str : anchor.keySet()) {
+			anch.put(str, new HashMap<ExpressionOperands, Integer>(anchor.get(str)));
 		}
 	}
 }

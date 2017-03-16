@@ -15,10 +15,12 @@ import java.util.Set;
 
 public class Parser {
     private Scanner scanner;
+    private String fileIndex;
     private static int _lineNum = 1;
     public static Map<String, Identifier> symbolTable;
     public Set<Integer> relationOperators;
     public List<CFG> functionCFGs;
+    public static int blockNum;
     
     /*
      * The parser is initialized with a file name, which is turn initializes the scanner with this file.
@@ -31,6 +33,7 @@ public class Parser {
      */
     public Parser(String fileName) {
         scanner = new Scanner(fileName);
+        fileIndex = fileName.substring(fileName.indexOf('.') - 3, fileName.indexOf('.'));
         relationOperators = new HashSet<Integer>();
         relationOperators.add(Token.eqlToken);
         relationOperators.add(Token.neqToken);
@@ -42,6 +45,9 @@ public class Parser {
         CFG mainFunction = new CFG();
         functionCFGs = new LinkedList<CFG>();
         functionCFGs.add(mainFunction);
+        blockNum = 0;
+        mainFunction.startBlock = new BasicBlock(blockNum++);
+        mainFunction.startBlock.blockId = blockNum++;
         computation(mainFunction.startBlock);
     }
     
@@ -93,7 +99,28 @@ public class Parser {
         
         // Printing out the IR - only temporary
         for (CFG cfg : functionCFGs) {
-            VisualizeCFG test = new VisualizeCFG(cfg.startBlock);
+	        DominatorTree dt = new DominatorTree(cfg);
+	        dt.constructDT();
+	        CP c = new CP();
+		    c.performCP(dt.root);
+		    CSE cs = new CSE();
+		    cs.performCSE(dt.root);
+		    RegisterAllocation ra = new RegisterAllocation();
+		    ra.allocate(dt.root);
+		    
+		    
+		    VCGPrinter vp = new VCGPrinter();
+		    vp.setOutputName("CFG" + fileIndex);
+		    vp.init();
+		    vp.printCFG(cfg);
+		    
+		    vp.setOutputName("DT" + fileIndex);
+		    vp.init();
+		    vp.printDominatorTree(dt.root);
+		    
+		    vp.setOutputName("RIG" + fileIndex);
+		    vp.init();
+		    vp.printRIG(ra.getRIG());
         }
     }
     
@@ -204,6 +231,7 @@ public class Parser {
         instr.op2 = new Result();
         instr.op2.kind = Result.Kind.VAR;
         instr.op2.name = x.name + "_BaseAddress";
+        Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
         x.kind = Result.Kind.INSTR;
         x.name = null;
@@ -279,6 +307,7 @@ public class Parser {
             instr.operation = OpCode.get(op);
             instr.op1 = new Result(x);
             instr.op2 = y;
+            Instruction.allInstructions.put(_lineNum, instr);
             currBlock.instructions.put(_lineNum++, instr);
             x.kind = Result.Kind.INSTR;
             x.name = null;
@@ -346,6 +375,7 @@ public class Parser {
         instr.instructionNumber = _lineNum;
         instr.op1 = x;
         instr.operation = OpCode.get(NegatedBranchOp.get(x.cond));
+        Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
     }
     
@@ -359,6 +389,7 @@ public class Parser {
         instr.instructionNumber = _lineNum;
         instr.op1 = new Result(x);
         instr.operation = OpCode.get(Token.branchToken);
+        Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
         x.fixupLocation = _lineNum - 1;
     }
@@ -404,7 +435,7 @@ public class Parser {
      * if this is within a nested while loop, the changes by the phi functions can be reflected in these too.
      */
     private BasicBlock ifStatement(BasicBlock currBlock, List<BasicBlock> joinBlocks){
-        BasicBlock joinBlock = new BasicBlock();
+        BasicBlock joinBlock = new BasicBlock(blockNum);
         joinBlock.kind = BasicBlock.Kind.JOIN;
 
         currBlock.joinBlock = joinBlock;
@@ -421,7 +452,7 @@ public class Parser {
             if(scanner.sym == Token.thenToken){
                 scanner.next();
 
-                BasicBlock ifBlock = new BasicBlock();
+                BasicBlock ifBlock = new BasicBlock(blockNum++);
                 ifBlock.kind = BasicBlock.Kind.IF;
                 currBlock.leftBlock = ifBlock;
                 ifBlock.rightParent = currBlock;
@@ -439,7 +470,7 @@ public class Parser {
                 
                 if(scanner.sym == Token.elseToken){
                     scanner.next();
-                    BasicBlock elseBlock = new BasicBlock();
+                    BasicBlock elseBlock = new BasicBlock(blockNum++);
                     elseBlock.kind = BasicBlock.Kind.ELSE;
                     copyVariables(currBlock, elseBlock);
                     currBlock.rightBlock = elseBlock;
@@ -455,6 +486,7 @@ public class Parser {
       
                     if(scanner.sym == Token.fiToken){
                         scanner.next();
+                        joinBlock.blockId = blockNum++;
                         Fixup(finalIfBlock, follow.fixupLocation);
                         
                         // Fill join block here
@@ -475,9 +507,11 @@ public class Parser {
                 } else {
                     Fixup(currBlock, x.fixupLocation);
                     joinBlocks.add(0, ifBlock);
-
+                    currBlock.rightBlock = joinBlock;
+                    joinBlock.rightParent = currBlock;
                     if (scanner.sym == Token.fiToken) {
                         scanner.next();
+                        joinBlock.blockId = blockNum++;
                         finalIfBlock.rightBlock = joinBlock;
                         
                         // Get phi functions by comparing the variable versions of the lastIfBlock and the currBlock
@@ -598,6 +632,7 @@ public class Parser {
                     instr.op2 = op2;
                     instr.op3 = op3;
                     instr.instructionNumber = _lineNum;
+                    Instruction.allInstructions.put(_lineNum, instr);
                     joinBlock.instructions.put(_lineNum++, instr);
                 }
             }
@@ -670,7 +705,7 @@ public class Parser {
      * doBlock.rightParent = whileBlock
      */
     private BasicBlock whileStatement(BasicBlock currBlock, List<BasicBlock> joinBlocks){
-        BasicBlock followBlock = new BasicBlock();
+        BasicBlock followBlock = new BasicBlock(blockNum);
         followBlock.kind = BasicBlock.Kind.FOLLOW;
         copyVariables(currBlock, followBlock);
         
@@ -680,7 +715,7 @@ public class Parser {
         
         if(scanner.sym == Token.whileToken){
             scanner.next();
-            BasicBlock whileBlock = new BasicBlock();
+            BasicBlock whileBlock = new BasicBlock(blockNum++);
             currBlock.leftBlock = whileBlock;
             whileBlock.rightParent = currBlock; 
             whileBlock.kind = BasicBlock.Kind.WHILE;
@@ -692,7 +727,7 @@ public class Parser {
             if(scanner.sym == Token.doToken){
                 scanner.next();
                 
-                BasicBlock doBlock = new BasicBlock();
+                BasicBlock doBlock = new BasicBlock(blockNum++);
                 whileBlock.leftBlock = doBlock;
                 whileBlock.rightBlock = followBlock;
                 followBlock.leftParent = whileBlock;
@@ -714,10 +749,11 @@ public class Parser {
                 joinBlocks.add(0, whileBlock);
                 
                 UnCondBraFwd(lastDoBlock, follow);
-                
+                if(lastDoBlock != doBlock)
+                	lastDoBlock.rightBlock = whileBlock;
                 if(scanner.sym == Token.odToken) {
                     scanner.next();
-                    
+                    followBlock.blockId = blockNum++;
                     // Generate the phi functions in the header block based on the difference in version
                     // numbers of variables in the while block and the lastDoBlock
                     generatePhiFunctions(whileBlock, whileBlock, lastDoBlock);
@@ -822,16 +858,19 @@ public class Parser {
             instr.kind = Instruction.Kind.FUNC;
             instr.operation = "WRITE";
             instr.op1 = y;
+            Instruction.allInstructions.put(_lineNum, instr);
             currBlock.instructions.put(_lineNum++, instr);
         } else if (x.name.equals("InputNum")) {
             Instruction instr = new Instruction();
             instr.kind = Instruction.Kind.FUNC;
             instr.operation = "READ";
+            Instruction.allInstructions.put(_lineNum, instr);
             currBlock.instructions.put(_lineNum++, instr);
         } else if (x.name.equals("OutputNewLine")) {
             Instruction instr = new Instruction();
             instr.kind = Instruction.Kind.FUNC;
             instr.operation = "WRITE NEW LINE";
+            Instruction.allInstructions.put(_lineNum, instr);
             currBlock.instructions.put(_lineNum++, instr);
         }
         return out;
@@ -897,6 +936,7 @@ public class Parser {
                currBlock.arrNames.add(x.name);
                 Instruction instr = new Instruction();
                 instr.operation =  "ARR " + x.name + " defined";
+                Instruction.allInstructions.put(_lineNum, instr);
                 currBlock.instructions.put(_lineNum++, instr);
                 List<Integer> list = new ArrayList<Integer>();
                 list.add(-1);
@@ -921,6 +961,7 @@ public class Parser {
                     currBlock.arrNames.add(x.name);
                     Instruction instr2 = new Instruction();
                     instr2.operation =  "ARR " + x.name + " defined";
+                    Instruction.allInstructions.put(_lineNum, instr2);
                     currBlock.instructions.put(_lineNum++, instr2);
                     List<Integer> list2 = new ArrayList<Integer>();
                     list2.add(-1);
@@ -988,7 +1029,7 @@ public class Parser {
             // Creating a new CFG for the new function 
             CFG newFunction = new CFG();
             newFunction.functionName = func.name;
-            newFunction.startBlock = new BasicBlock();
+            newFunction.startBlock = new BasicBlock(blockNum++);
             functionCFGs.add(newFunction);
             
             // Setting the current block to be the start block of this function 
