@@ -106,7 +106,7 @@ public class Parser {
 		    CSE cs = new CSE();
 		    cs.performCSE(dt.root);
 		    RegisterAllocation ra = new RegisterAllocation();
-		    ra.allocate(dt.root);
+		    ra.allocate(cfg.startBlock);
 		    
 		    
 		    VCGPrinter vp = new VCGPrinter();
@@ -717,7 +717,7 @@ public class Parser {
             scanner.next();
             BasicBlock whileBlock = new BasicBlock(blockNum++);
             currBlock.leftBlock = whileBlock;
-            whileBlock.rightParent = currBlock; 
+            whileBlock.leftParent = currBlock; 
             whileBlock.kind = BasicBlock.Kind.WHILE;
             copyVariables(currBlock, whileBlock);
 
@@ -733,6 +733,7 @@ public class Parser {
                 followBlock.leftParent = whileBlock;
                 whileBlock.joinParent = whileBlock;
                 whileBlock.joinBlock = whileBlock;
+                whileBlock.rightParent = doBlock;
                 
                 doBlock.leftBlock = whileBlock;
                 doBlock.rightParent = whileBlock;
