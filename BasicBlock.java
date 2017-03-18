@@ -19,6 +19,7 @@ public class BasicBlock {
     public Map<Integer, Instruction> instructions;
     boolean written;
     public Set<String> arrNames;
+    public int id;
     
     public enum Kind {STD, IF, ELSE, WHILE, JOIN, FOLLOW, DO}
     
