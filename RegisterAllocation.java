@@ -22,7 +22,7 @@ public class RegisterAllocation {
 	}
 	
 	public RIG getRIG(){
-		return _interferenceGraph;
+		return _graphCopy;
 	}
 	
 	private class BlockData{
@@ -154,16 +154,18 @@ public class RegisterAllocation {
 			registerMapping.put(instr.instructionNumber, instr.regNo);
 			if(instr.kind == Instruction.Kind.PHI && colored){
 				if (instr.op2.kind == Result.Kind.INSTR) {
-					registerMapping.put(instr.instructionNumber, instr.regNo);
+					registerMapping.put(instr.op2.version, instr.regNo);
 				}
 				
 				if (instr.op3.kind == Result.Kind.INSTR) {
-					registerMapping.put(instr.instructionNumber, instr.regNo);
+					registerMapping.put(instr.op3.version, instr.regNo);
 				}
 				
 				
 				if (op2Move) {
 					generateMoveInstruction(instr.op2, instr.regNo, instr);
+					Instruction instr2 = Instruction.allInstructions.get(instr.op2.version);
+					instr2.regNo = instr.regNo;
 				}else{
 					Instruction instr2 = Instruction.allInstructions.get(instr.op2.version);
 					instr2.regNo = instr.regNo;
@@ -171,6 +173,8 @@ public class RegisterAllocation {
 				
 				if (op3Move) {
 					generateMoveInstruction(instr.op3, instr.regNo, instr);
+					Instruction instr2 = Instruction.allInstructions.get(instr.op3.version);
+					instr2.regNo = instr.regNo;
 				}else{
 					Instruction instr2 = Instruction.allInstructions.get(instr.op3.version);
 					instr2.regNo = instr.regNo;

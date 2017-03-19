@@ -62,7 +62,7 @@ public class VCGPrinter {
 
             writer.println("node: {");
             writer.println("title: \"" + a.instructionNumber + "\"");
-            writer.println("label: \"" + "[ REG: " + interferenceGraph.getNode(a).get_instr().regNo + " ::: " + a.toString() + "\"");
+            writer.println("label: \"" + "[ REG: " + interferenceGraph.getNode(a).get_instr().regNo + " ::: " + a.instructionNumber + " : " + a.toString() + "]\"");
             //writer.println("label: \"" +a.instructionNumber+ " [" +  a.toString() + "]\"");
             writer.println("}");
 

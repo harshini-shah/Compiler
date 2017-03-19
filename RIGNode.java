@@ -16,7 +16,7 @@ public class RIGNode {
 	public RIGNode(RIGNode other){
 		this._neighbors = new HashSet<RIGNode>(other.get_neighbors());
 		this._color = other.get_color();
-		this._instr = new Instruction(other.get_instr());
+		this._instr = other.get_instr();
 	}
 	
 	public HashSet<RIGNode> get_neighbors() {

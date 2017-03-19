@@ -120,38 +120,38 @@ public class Parser {
 		    ra.allocate(cfg.startBlock);
 		    
 		    
-//		    VCGPrinter vp = new VCGPrinter();
-//		    vp.setOutputName("CFG" + fileIndex);
-//		    vp.init();
-//		    vp.printCFG(cfg);
-//		    
-//		    vp.setOutputName("DT" + fileIndex);
-//		    vp.init();
-//		    vp.printDominatorTree(dt.root);
-//		    
-//		    vp.setOutputName("RIG" + fileIndex);
-//		    vp.init();
-//		    vp.printRIG(ra.getRIG());
+		    VCGPrinter vp = new VCGPrinter();
+		    vp.setOutputName("CFG" + fileIndex);
+		    vp.init();
+		    vp.printCFG(cfg);
+		    
+		    vp.setOutputName("DT" + fileIndex);
+		    vp.init();
+		    vp.printDominatorTree(dt.root);
+		    
+		    vp.setOutputName("RIG" + fileIndex);
+		    vp.init();
+		    vp.printRIG(ra.getRIG());
 		    
 		    // printing the final instructions
-		    FinalInstructions fi = new FinalInstructions(ra);
-		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
-		    for (int ii : finalInstructions.keySet()) {
-		        System.out.println(ii + "\t" + finalInstructions.get(ii));
-//		        System.out.println(finalInstructions.get(ii).regNo);
-		    }
-		    
-		    MachineCode mc = new MachineCode(ra);
-		    mc.generateCode();
+//		    FinalInstructions fi = new FinalInstructions(ra);
+//		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
+//		    for (int ii : finalInstructions.keySet()) {
+//		        System.out.println(ii + "\t" + finalInstructions.get(ii));
+////		        System.out.println(finalInstructions.get(ii).regNo);
+//		    }
+//		    
+//		    MachineCode mc = new MachineCode(ra);
+//		    mc.generateCode();
 		    
 //		    System.out.println(Integer.toBinaryString(mc.buf[0]));
 //            System.out.println(Integer.toBinaryString(mc.buf[1]));
 //            System.out.println(Integer.toBinaryString(mc.buf[2]));
 
 		    
-		    DLXMachine dlx = new DLXMachine();
-		    dlx.load(mc.buf);
-		    dlx.execute();
+//		    DLXMachine dlx = new DLXMachine();
+//		    dlx.load(mc.buf);
+//		    dlx.execute();
 		    
 		    
         }

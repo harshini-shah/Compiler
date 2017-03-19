@@ -98,7 +98,7 @@ public class RIG {
 	
 	public void copy(RIG origGraph){
 		for(Map.Entry<Instruction, RIGNode> ent : origGraph.getGraph().entrySet()){
-			this.addNode(new Instruction(ent.getKey()), new RIGNode(ent.getValue()));
+			this.addNode(ent.getKey(), new RIGNode(ent.getValue()));
 		}
 	}
 }
