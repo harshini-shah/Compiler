@@ -1,4 +1,5 @@
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -12,14 +13,18 @@ public class MachineCode {
     private static Map<String, Integer> f3code;
     private static Set<String> branchInstructions;
     private static Set<String> arithmeticInstructions;
-
+    private int dummyRegister = 25;
+    private RegisterAllocation ra;
     
-    public MachineCode() {
+    public MachineCode(RegisterAllocation ra) {
         // The + 1000 for the saving and restoring registers and variables etc
         f2code = new HashMap<String, Integer>();
         f1code = new HashMap<String, Integer>();
         f3code = new HashMap<String, Integer>();
 
+        branchInstructions = new HashSet<String>();
+        arithmeticInstructions = new HashSet<String>();
+        this.ra = ra;
         populateIR2Code();
         buf = new int[Instruction.allInstructions.size() + 1000];
         pc = 0;
@@ -110,35 +115,66 @@ public class MachineCode {
      * - how to reference the frame pointer? is it what R30 points to?
      */
     public void generateCode() {
-        Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(FinalInstructions.finalInstructions);
-        
+        FinalInstructions fi = new FinalInstructions(ra);
+        Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);   
         
         for (Instruction instr : allInstructions.values()) {
             int a = 0; 
             int b = 0;
             int c = 0;
             if (arithmeticInstructions.contains(instr.operation)) {
-                if (instr.op1.kind == Result.Kind.CONST || instr.op2.kind == Result.Kind.CONST) {
+                if (instr.op1.kind == Result.Kind.CONST && instr.op2.kind == Result.Kind.CONST) {
+                    if (instr.operation.equals("ADD")) {
+                        c = instr.op1.value + instr.op2.value;
+                    } else if (instr.operation.equals("SUB")) {
+                        c = instr.op1.value - instr.op2.value;
+
+                    } else if (instr.operation.equals("MUL")) {
+                        c = instr.op1.value * instr.op2.value;
+
+                    } else if (instr.operation.equals("DIV")) {
+                        c = instr.op1.value / instr.op2.value;
+
+                    } else if (instr.operation.equals("CMP")) {
+                        if (instr.op1.value > instr.op2.value) {
+                            c = +1;
+                        } else {
+                            c = -1;
+                        }
+                    }
+                    
+                    putF1(f1code.get("ADD"), instr.regNo, 0, c);
+                } else if (instr.op1.kind == Result.Kind.CONST || instr.op2.kind == Result.Kind.CONST) {
                     if (instr.op1.kind == Result.Kind.CONST) {
                         c = instr.op1.value;
-                        b = instr.op1.version;
+                        b = instr.op2.regNo; 
                     } else {
                         c = instr.op2.value;
+                        b = instr.op1.regNo; 
                     }
-//                    putF1(f1code.get(instr.operation), );
+                    //System.out.println("Instr reg is " + instr.regNo);
+                    putF1(f1code.get(instr.operation), instr.regNo, b, c);
                 } else {
                     
                 }
             } else if (branchInstructions.contains(instr.operation)) {
                 
             } else if (instr.operation == "RET") {
-                
+                c = instr.op1.value;
+                putF2(f2code.get(instr.operation), a, b, c);
             } else if (instr.operation == "READ") {
-                
+                a = instr.regNo;
+                putF2(f2code.get(instr.operation), a, b, c);
             } else if (instr.operation == "WRITE") {
-                
+                if (instr.op1.kind == Result.Kind.CONST) {
+                    putF1(f1code.get("ADD"), dummyRegister, 0, instr.op1.value);
+                    b = dummyRegister;
+                } else if (instr.op1.kind == Result.Kind.REG) {
+                    b = instr.op1.regNo;
+                }
+                putF2(f2code.get(instr.operation), a, b, c);
             } else if (instr.operation == "WRITE NEW LINE") {
-                
+                putF1(f1code.get(instr.operation), a, b, c);
             } else {
                 System.out.println("ERROR : Instruction operation does not match any known op");
             }

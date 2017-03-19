@@ -19,16 +19,18 @@ import java.util.Map;
  *  need a load and store.
  */
 public class FinalInstructions {
-    public static Map<Integer, Instruction> finalInstructions;
+    public Map<Integer, Instruction> finalInstructions;
     private int instructionNumber;
     private Map<Integer, Integer> old2new;
     private ArrayList<Integer> toBeChanged;
+    private RegisterAllocation ra;
     
-    public FinalInstructions() {
-        instructionNumber = 0;
-        old2new = new HashMap<Integer, Integer>();
+    public FinalInstructions(RegisterAllocation ra) {
+        instructionNumber = 1;
         finalInstructions = new HashMap<Integer, Instruction>();
+        old2new = new HashMap<Integer, Integer>();
         toBeChanged = new ArrayList<Integer>();
+        this.ra = ra;
         getFinalInstructions();
         modifyInstructions();
     }
@@ -73,7 +75,7 @@ public class FinalInstructions {
                                 if (instr.op1.kind != Result.Kind.INSTR) {
                                     System.out.println("ERROR : Branch Op is of kind " + instr.op1.kind);
                                 }
-                                instr.op2.kind = Result.Kind.INSTR;
+                                
                                 instr.op2.version = old2new.get(instr.instructionNumber - 1);
                                 instr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber);
@@ -86,6 +88,7 @@ public class FinalInstructions {
                         }
                     } else if (instr.kind == Instruction.Kind.END) {
                         instr.operation = "RET";
+                        instr.op1 = new Result();
                         instr.op1.kind = Result.Kind.CONST;
                         instr.op1.value = 0;
                         instr.op2 = null;
@@ -112,10 +115,16 @@ public class FinalInstructions {
                                 finalInstructions.put(instructionNumber++, instr);
                                 break;
                             case "WRITE":
-                                if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR) {
+                                if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op is of kind " + instr.op1.kind);
                                 } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                    instr.op1.version = old2new.get(instr.op1.version);
+                                    instr.op1.kind = Result.Kind.REG;
+//                                    for (int i : old2new.keySet()) {
+//                                        System.out.println("Old 2 new : " + i + " " + old2new.get(i));
+//                                    }
+//                                    System.out.println(instr.op1.version);
+                                    
+                                    instr.op1.regNo = ra.registerMapping.get(instr.op1.version);
                                 }
                                 
                                 instr.op2 = null;
@@ -135,11 +144,17 @@ public class FinalInstructions {
                         case "MUL":
                         case "DIV":
                         case "CMP":
-                            if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR) {
-                                System.out.println("ERROR : Op is of kind " + instr.op1.kind);
+                            if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
+                                System.out.println("ERROR : Op 1 is of kind " + instr.op1.kind);
                             } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                instr.op1.version = old2new.get(instr.op1.version);
-                            }
+                                instr.op1.kind = Result.Kind.REG;
+                                instr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
+                            
+                            if (instr.op2.kind != Result.Kind.CONST && instr.op2.kind != Result.Kind.INSTR && instr.op2.kind != Result.Kind.REG) {
+                                System.out.println("ERROR : Op 2 is of kind " + instr.op2.kind);
+                            } else if (instr.op2.kind == Result.Kind.INSTR) {
+                                instr.op2.kind = Result.Kind.REG;
+                                instr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
                             
                             instr.op3 = null;
                             old2new.put(instr.instructionNumber, instructionNumber);

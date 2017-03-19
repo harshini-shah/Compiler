@@ -8,6 +8,7 @@ public class Result{
         public int cond;
         public int fixupLocation;
         public int version;
+        public int regNo;
         public List<Result> dimensions;
         
         public enum Kind{

@@ -25,6 +25,20 @@ public class Instruction {
         regNo = -1;
         isDeleted = false;
     }
+    
+    public Instruction(Instruction instr) {
+        this.kind = instr.kind;
+        this.operation = instr.operation;
+        this.op1 = instr.op1;
+        this.op2 = instr.op2;
+        this.op3 = instr.op3;
+        this.instructionNumber = instr.instructionNumber;
+        this.isDeleted = instr.isDeleted;
+        this.regNo = instr.regNo;
+        this.thisBlock = instr.thisBlock;
+        this.allInstructions = new HashMap<Integer, Instruction>();
+        this.allInstructions.putAll(instr.allInstructions);
+    }
 
     @ Override
     public String toString() {
@@ -64,6 +78,8 @@ public class Instruction {
             sb.append("(" + op.version + ")");
         } else if (op.kind == Result.Kind.VAR) {
             sb.append(op.name + "_" + instructionNumber);
+        } else if (op.kind == Result.Kind.REG) {
+            sb.append("R" + op.regNo);
         }
 
         return sb.toString();
