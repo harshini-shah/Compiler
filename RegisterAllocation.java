@@ -12,6 +12,7 @@ public class RegisterAllocation {
 	private Set<Integer> _whileJoinBlockIds;
 	private List<Set<Instruction>> _clusters;
 	public Map<Integer, Integer> registerMapping;
+	private Map<Instruction, BasicBlock> _phis;
 	
 	public RegisterAllocation(){
 		_interferenceGraph = new RIG();
@@ -20,6 +21,7 @@ public class RegisterAllocation {
 		_whileJoinBlockIds = new HashSet<Integer>();
 		_clusters = new ArrayList<Set<Instruction>>();
 		registerMapping = new HashMap<Integer, Integer>();
+		_phis = new HashMap<Instruction, BasicBlock>();
 	}
 	
 	public RIG getRIG(){
@@ -41,6 +43,7 @@ public class RegisterAllocation {
 		calculateLiveRange(root, null, 2);
 		_graphCopy.copy(_interferenceGraph);
 		allocateReg();
+		insertMoves();
 	}
 	
 	private void allocateReg(){
@@ -85,18 +88,53 @@ public class RegisterAllocation {
 		}
 	}
 	
-	private void generateMoveInstruction(Result res, int regNum, Instruction phi) {
+	private void insertMoves(){
+		for(Map.Entry<Instruction, BasicBlock> entry : _phis.entrySet()){
+			Instruction instr2 = null;
+			Instruction instr3 = null;
+			if(entry.getKey().op2 != null && entry.getKey().op2.kind == Result.Kind.INSTR)
+				instr2 = Instruction.allInstructions.get(entry.getKey().op2.version);
+			if(entry.getKey().op3 != null && entry.getKey().op3.kind == Result.Kind.INSTR)
+				instr3 = Instruction.allInstructions.get(entry.getKey().op3.version);
+			if(instr2 != null && instr2.regNo != entry.getKey().regNo){
+				generateMoveInstruction(entry.getKey().regNo, instr2.regNo, entry.getValue(), 1, false);
+			}else if(instr2 == null && entry.getKey().op2.kind == Result.Kind.CONST){
+				generateMoveInstruction(entry.getKey().regNo, entry.getKey().op2.value, entry.getValue(), 1, true);
+			}
+			
+			if(instr3 != null && instr3.regNo != entry.getKey().regNo){
+				generateMoveInstruction(entry.getKey().regNo, instr3.regNo, entry.getValue(), 2, false);
+			}else if(instr3 == null && entry.getKey().op3.kind == Result.Kind.CONST){
+				generateMoveInstruction(entry.getKey().regNo, entry.getKey().op3.value, entry.getValue(), 2, true);
+			}
+		}
+	}
+	
+	private void generateMoveInstruction(int destReg, int source, BasicBlock current, int branch, boolean constant){
 		Instruction instr = new Instruction();
 		instr.kind = Instruction.Kind.STD;
-		instr.op2 = res;
-		Result register = new Result();
-		register.kind = Result.Kind.REG;
-		register.value = regNum;
+		Result dest = new Result();
+		dest.kind = Result.Kind.REG;
+		dest.regNo = destReg;
 		instr.operation = "MOV";
+		Result s = new Result();
+		if(!constant){
+			s.kind = Result.Kind.REG;
+			s.regNo = source;
+		}else{
+			s.kind = Result.Kind.CONST;
+			s.value = source;
+		}
+		instr.op1 = s;
+		instr.op2 = dest;
 		instr.instructionNumber = Parser._lineNum;
-		instr.thisBlock = phi.thisBlock;
-		phi.thisBlock.instructions.put(Parser._lineNum++, instr);
-		
+		if(branch == 1){
+			instr.thisBlock = current.leftParent;
+			current.leftParent.instructions.put(Parser._lineNum++, instr);
+		}else if(branch == 2){
+			instr.thisBlock = current.rightParent;
+			current.rightParent.instructions.put(Parser._lineNum++, instr);
+		}
 	}
 	
 	private int colorNode(RIGNode node, Instruction instr, int color){
@@ -228,6 +266,9 @@ public class RegisterAllocation {
 		}
 		for (Instruction ent : blockInstructionsReverse) {
 			if(!ent.isDeleted && ent.kind == Instruction.Kind.PHI){
+				if(!_phis.containsKey(ent)){
+					_phis.put(ent, node);
+				}
 				boolean existsInCluster = false;
 				for(Set<Instruction> mem : _clusters){
 					if(mem.contains(ent) || 

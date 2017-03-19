@@ -121,9 +121,7 @@ public class Parser {
 		    
 		    
 		    VCGPrinter vp = new VCGPrinter();
-		    vp.setOutputName("CFG" + fileIndex);
-		    vp.init();
-		    vp.printCFG(cfg);
+		    
 		    
 		    vp.setOutputName("DT" + fileIndex);
 		    vp.init();
@@ -133,6 +131,9 @@ public class Parser {
 		    vp.init();
 		    vp.printRIG(ra.getRIG());
 		    
+		    vp.setOutputName("CFG" + fileIndex);
+		    vp.init();
+		    vp.printCFG(cfg);
 		    // printing the final instructions
 //		    FinalInstructions fi = new FinalInstructions(ra);
 //		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
