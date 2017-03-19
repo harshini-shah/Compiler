@@ -30,6 +30,10 @@ public class RIG {
 		}
 	}
 	
+	public void addNode(Instruction instr, RIGNode node){
+		_rig.put(instr, node);
+	}
+	
 	public RIGNode getNode(Instruction instr){
 		return _rig.get(instr);
 	}
@@ -45,9 +49,38 @@ public class RIG {
 		return degree;
 	}
 	
+	public Instruction getNodeMaxDegree(){
+		Instruction inst = new Instruction();
+		int index = 0;
+		for(Instruction instr : _rig.keySet()){
+			if(index == 0){
+				inst = instr;
+			}
+			if(getDegree(instr) <= 8){
+				return instr;
+			}
+			index++;
+		}
+		return inst;
+	}
+	
 	public Set<RIGNode> getNeighbors(Instruction instr){
 		if(_rig.containsKey(instr))
 			return _rig.get(instr).get_neighbors();
 		return null;
+	}
+	
+	public boolean isEmpty(){
+		return _rig.size() == 0;
+	}
+	
+	public RIGNode removeNode(Instruction instr){
+		RIGNode node = _rig.get(instr);
+		_rig.remove(instr);
+		
+		for(RIGNode neighbor : node.get_neighbors()){
+			neighbor.removeNeighbor(node);
+		}
+		return node;
 	}
 }

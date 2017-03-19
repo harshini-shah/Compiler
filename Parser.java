@@ -466,7 +466,7 @@ public class Parser {
                 ifBlock.kind = BasicBlock.Kind.IF;
                 currBlock.leftBlock = ifBlock;
                 ifBlock.rightParent = currBlock;
-                joinBlock.leftParent = ifBlock;
+                
                 copyVariables(currBlock, ifBlock);
                 
                 if (joinBlocks == null) {
@@ -486,7 +486,6 @@ public class Parser {
                     copyVariables(currBlock, elseBlock);
                     currBlock.rightBlock = elseBlock;
                     elseBlock.leftParent = currBlock;
-                    joinBlock.rightParent = elseBlock;
                     
                     UnCondBraFwd(finalIfBlock, follow);
                     Fixup(currBlock, x.fixupLocation);
@@ -504,7 +503,8 @@ public class Parser {
                         // Fill join block here
                         finalIfBlock.rightBlock = joinBlock;
                         finalElseBlock.leftBlock = joinBlock;
-                        
+                        joinBlock.leftParent = finalIfBlock;
+                        joinBlock.rightParent = finalElseBlock;
                         // Get the phi functions for this block by comparing the variable versions of the lastIfBlock
                         // and lastElseBlock
                         generatePhiFunctions(joinBlock, finalIfBlock, finalElseBlock);
@@ -526,7 +526,7 @@ public class Parser {
                         joinBlock.blockId = blockNum++;
                         functionCFGs.get(currentCFG).bbs.add(joinBlock);
                         finalIfBlock.rightBlock = joinBlock;
-                        
+                        joinBlock.leftParent = finalIfBlock;
                         // Get phi functions by comparing the variable versions of the lastIfBlock and the currBlock
                         generatePhiFunctions(joinBlock, finalIfBlock, currBlock);
                         
@@ -765,8 +765,10 @@ public class Parser {
                 joinBlocks.add(0, whileBlock);
                 
                 UnCondBraFwd(lastDoBlock, follow);
-                if(lastDoBlock != doBlock)
+                if(lastDoBlock != doBlock){
                 	lastDoBlock.rightBlock = whileBlock;
+                	whileBlock.rightParent = lastDoBlock;
+                }
                 if(scanner.sym == Token.odToken) {
                     scanner.next();
                     followBlock.blockId = blockNum++;

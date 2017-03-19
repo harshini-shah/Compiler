@@ -28,6 +28,11 @@ public class RIGNode {
 	public void addNeighbor(RIGNode node){
 		_neighbors.add(node);
 	}
+	
+	public void removeNeighbor(RIGNode node){
+		if(_neighbors.contains(node))
+			_neighbors.remove(node);
+	}
 
 	public int get_color() {
 		return _color;
