@@ -54,7 +54,7 @@ public class Parser {
         mainFunction.startBlock.blockId = blockNum++;
         currentCFG = 0;
         functionCFGs.get(currentCFG).bbs.add(mainFunction.startBlock);
-        
+        dominatorTrees = new ArrayList<DominatorTree>();
         computation(mainFunction.startBlock);
         
     }

@@ -32,10 +32,12 @@ public class RegisterAllocation {
 	public void allocate(BasicBlock root){
 		calculateLiveRange(root, null, 1);
 		calculateLiveRange(root, null, 2);
-		//allocateReg();
+		allocateReg();
 	}
 	
 	private void allocateReg(){
+		if(_interferenceGraph.isEmpty())
+			return;
 		Instruction instr = _interferenceGraph.getNodeMaxDegree();
 		RIGNode node = _interferenceGraph.removeNode(instr);
 		if(!_interferenceGraph.isEmpty()){
@@ -49,7 +51,17 @@ public class RegisterAllocation {
 		}
 		int color = 1;
 		boolean colored = false;
-		while(!colored){
+		while(!colored && color < 32){
+			if(!colorsN.contains(color)){
+				instr.regNo = color;
+				colored = true;
+			}
+			if(!colored){
+				color++;
+			}
+		}
+		if(!colored){
+			System.out.println("Error: No color assigned to the instr" + instr.toString());
 		}
 	}
 	
