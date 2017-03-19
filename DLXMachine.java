@@ -69,6 +69,9 @@ public class DLXMachine {
                     break;
                 case DLXInstruction.MUL:
                 case DLXInstruction.MULI:
+                    System.out.println("a is " + a);
+                    System.out.println(" b is " + b);
+                    System.out.println("c is " + c);
                     R[a] = R[b] * c;
                     break;
                 case DLXInstruction.DIV:
@@ -185,7 +188,7 @@ public class DLXMachine {
                     break;
                 case DLXInstruction.RET:
                     if (saved_c == 0) {
-                        System.out.println("Return value is 0");
+                        System.out.println("EOF");
                         break program;
                     }
                     nextpc = c/4;
@@ -201,7 +204,7 @@ public class DLXMachine {
                     R[a] = Integer.parseInt(input);
                     break;
                 case DLXInstruction.WRD:
-                    System.out.print(R[b] + " ");
+                    System.out.println(R[b]);
                     break;
                 case DLXInstruction.WRH:
                     System.out.print("0x" + Integer.toHexString(R[b]) + " ");
@@ -280,7 +283,6 @@ public class DLXMachine {
         if (F1ops.contains(opNum)) {
             format = Format.F1;
             op = opNum;
-            
             // Getting a, b, c
             a = (instruction & 0x3FFFFFF) >>> 21;
             b = (instruction & 0x1FFFFF) >>> 16;
