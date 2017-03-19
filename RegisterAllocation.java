@@ -6,16 +6,18 @@ import java.util.Set;
 
 public class RegisterAllocation {
 	private RIG _interferenceGraph;
+	private RIG _graphCopy;
 	private Map<Integer, BlockData> _blockStats;
 	private Set<Integer> _whileJoinBlockIds;
-	private Map<Instruction, Set<Instruction>> _clusters;
+	private Map<Instruction, Set<Integer>> _clusters;
 	public Map<Integer, Integer> registerMapping;
 	
 	public RegisterAllocation(){
 		_interferenceGraph = new RIG();
+		_graphCopy = new RIG();
 		_blockStats = new HashMap<Integer, BlockData>();
 		_whileJoinBlockIds = new HashSet<Integer>();
-		_clusters = new HashMap<Instruction, Set<Instruction>>();
+		_clusters = new HashMap<Instruction, Set<Integer>>();
 		registerMapping = new HashMap<Integer, Integer>();
 	}
 	
@@ -36,6 +38,7 @@ public class RegisterAllocation {
 	public void allocate(BasicBlock root){
 		calculateLiveRange(root, null, 1);
 		calculateLiveRange(root, null, 2);
+		_graphCopy.copy(_interferenceGraph);
 		allocateReg();
 	}
 	
@@ -73,40 +76,40 @@ public class RegisterAllocation {
 				
 				if(instr2 != null || instr3 != null ){
 					if(instr2 != null && instr3 == null){
-						if(!_interferenceGraph.isEdge(instr, instr2)){
-							for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+						if(!_graphCopy.isEdge(instr, instr2)){
+							for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
 								colorsN.add(n.get_instr().regNo);
 							}
 						}else{
 							op2Move = true;
 						}
 					}else if(instr2 == null && instr3 != null){
-						if(!_interferenceGraph.isEdge(instr, instr3)){
-							for(RIGNode n : _interferenceGraph.getNode(instr3).get_neighbors()){
+						if(!_graphCopy.isEdge(instr, instr3)){
+							for(RIGNode n : _graphCopy.getNode(instr3).get_neighbors()){
 								colorsN.add(n.get_instr().regNo);
 							}
 						}else{
 							op3Move = true;
 						}
 					}else{
-						if(_interferenceGraph.isEdge(instr2, instr3)){
+						if(_graphCopy.isEdge(instr2, instr3)){
 							opsInterfere = true;
-							if(!_interferenceGraph.isEdge(instr, instr2) && _interferenceGraph.isEdge(instr, instr3)){
-								for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+							if(!_graphCopy.isEdge(instr, instr2) && _graphCopy.isEdge(instr, instr3)){
+								for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
 									colorsN.add(n.get_instr().regNo);
 								}
 								op3Move = true;
-							}else if(!_interferenceGraph.isEdge(instr, instr3) && _interferenceGraph.isEdge(instr, instr2)){
-								for(RIGNode n : _interferenceGraph.getNode(instr3).get_neighbors()){
+							}else if(!_graphCopy.isEdge(instr, instr3) && _graphCopy.isEdge(instr, instr2)){
+								for(RIGNode n : _graphCopy.getNode(instr3).get_neighbors()){
 									colorsN.add(n.get_instr().regNo);
 								}
 								op2Move = true;
 							}else{
-								if(_interferenceGraph.isEdge(instr, instr3) && _interferenceGraph.isEdge(instr, instr2)){
+								if(_graphCopy.isEdge(instr, instr3) && _graphCopy.isEdge(instr, instr2)){
 									op2Move = true;
 									op3Move = true;
 								}else{
-									for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+									for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
 										colorsN.add(n.get_instr().regNo);
 									}
 									op3Move = true;
@@ -116,16 +119,16 @@ public class RegisterAllocation {
 //							if (_interferenceGraph.isEdge(instr, instr2) && _interferenceGraph.isEdge(instr, instr3)) {
 //								
 //							}
-							if(!_interferenceGraph.isEdge(instr, instr2)){
-								for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+							if(!_graphCopy.isEdge(instr, instr2)){
+								for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
 									colorsN.add(n.get_instr().regNo);
 								}
 							}else{
 								op2Move = true;
 							}
 							
-							if(!_interferenceGraph.isEdge(instr, instr3)){
-								for(RIGNode n : _interferenceGraph.getNode(instr3).get_neighbors()){
+							if(!_graphCopy.isEdge(instr, instr3)){
+								for(RIGNode n : _graphCopy.getNode(instr3).get_neighbors()){
 									colorsN.add(n.get_instr().regNo);
 								}
 							}else{
@@ -194,8 +197,8 @@ public class RegisterAllocation {
 	}
 	
 	private boolean isClusterMember(Instruction instr){
-		for(Set<Instruction> mem : _clusters.values()){
-			if(mem.contains(instr)){
+		for(Set<Integer> mem : _clusters.values()){
+			if(mem.contains(instr.instructionNumber)){
 				return true;
 			}
 		}
@@ -296,11 +299,11 @@ public class RegisterAllocation {
 		for (Instruction ent : blockInstructionsReverse) {
 			if(!ent.isDeleted && ent.kind == Instruction.Kind.PHI){
 				if(!_clusters.containsKey(ent)){
-					Set<Instruction> clusterMembers = new HashSet<Instruction>();
+					Set<Integer> clusterMembers = new HashSet<Integer>();
 					if(ent.op2 != null && ent.op2.kind == Result.Kind.INSTR)
-						clusterMembers.add(Instruction.allInstructions.get(ent.op2.version));
+						clusterMembers.add(ent.op2.version);
 					if(ent.op3 != null && ent.op3.kind == Result.Kind.INSTR)
-						clusterMembers.add(Instruction.allInstructions.get(ent.op3.version));
+						clusterMembers.add(ent.op3.version);
 					_clusters.put(ent, clusterMembers);
 				}
 				//i : op op1 op2

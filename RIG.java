@@ -50,14 +50,16 @@ public class RIG {
 	}
 	
 	public Instruction getNodeMaxDegree(){
+		int maxDegree = 0;
 		Instruction inst = new Instruction();
 		int index = 0;
 		for(Instruction instr : _rig.keySet()){
 			if(index == 0){
 				inst = instr;
 			}
-			if(getDegree(instr) <= 8){
-				return instr;
+			if(getDegree(instr) > maxDegree && getDegree(instr) <= 8){
+				inst = instr;
+				maxDegree = getDegree(instr);
 			}
 			index++;
 		}
@@ -88,5 +90,15 @@ public class RIG {
 		RIGNode node1 = _rig.get(instr1);
 		RIGNode node2 = _rig.get(instr2);
 		return node1.get_neighbors().contains(node2) && node2.get_neighbors().contains(node1);
+	}
+	
+	public Map<Instruction, RIGNode> getGraph(){
+		return _rig;
+	}
+	
+	public void copy(RIG origGraph){
+		for(Map.Entry<Instruction, RIGNode> ent : origGraph.getGraph().entrySet()){
+			this.addNode(new Instruction(ent.getKey()), new RIGNode(ent.getValue()));
+		}
 	}
 }

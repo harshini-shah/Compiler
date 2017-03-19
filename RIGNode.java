@@ -12,7 +12,13 @@ public class RIGNode {
 		//_cost = 0;
 		_instr = instr;
 	}
-
+	
+	public RIGNode(RIGNode other){
+		this._neighbors = new HashSet<RIGNode>(other.get_neighbors());
+		this._color = other.get_color();
+		this._instr = new Instruction(other.get_instr());
+	}
+	
 	public HashSet<RIGNode> get_neighbors() {
 		return _neighbors;
 	}

@@ -36,11 +36,31 @@ public class Instruction {
         this.isDeleted = instr.isDeleted;
         this.regNo = instr.regNo;
         this.thisBlock = instr.thisBlock;
-        this.allInstructions = new HashMap<Integer, Instruction>();
-        this.allInstructions.putAll(instr.allInstructions);
     }
 
-    @ Override
+    @Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + instructionNumber;
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		Instruction other = (Instruction) obj;
+		if (instructionNumber != other.instructionNumber)
+			return false;
+		return true;
+	}
+
+	@ Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append(operation);
