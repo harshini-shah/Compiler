@@ -21,6 +21,7 @@ public class Parser {
     public Set<Integer> relationOperators;
 
     public static List<CFG> functionCFGs;
+    public static List<DominatorTree> dominatorTrees;
     public static int blockNum;
     private int currentCFG;
     
@@ -53,6 +54,7 @@ public class Parser {
         mainFunction.startBlock.blockId = blockNum++;
         currentCFG = 0;
         functionCFGs.get(currentCFG).bbs.add(mainFunction.startBlock);
+        
         computation(mainFunction.startBlock);
         
     }
@@ -107,6 +109,7 @@ public class Parser {
         for (CFG cfg : functionCFGs) {
 	        DominatorTree dt = new DominatorTree(cfg);
 	        dt.constructDT();
+	        dominatorTrees.add(dt);
 	        CP c = new CP();
 		    c.performCP(dt.root);
 		    CSE cs = new CSE();

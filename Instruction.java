@@ -13,6 +13,7 @@ public class Instruction {
     public Result op3;
     public int instructionNumber;
     public boolean isDeleted;
+    public int regNo;
     public static Map<Integer, Instruction> allInstructions = new HashMap<Integer, Instruction>();
     
     public Instruction() {
@@ -20,6 +21,7 @@ public class Instruction {
         op1 = null;
         op2 = null;
         op3 = null;
+        regNo = -1;
         isDeleted = false;
     }
 

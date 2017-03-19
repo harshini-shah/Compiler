@@ -1,5 +1,6 @@
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 public class MachineCode {
@@ -9,6 +10,8 @@ public class MachineCode {
     private static Map<String, Integer> f2code;
     private static Map<String, Integer> f1code;
     private static Map<String, Integer> f3code;
+    private static Set<String> branchInstructions;
+    private static Set<String> arithmeticInstructions;
 
     
     public MachineCode() {
@@ -68,6 +71,21 @@ public class MachineCode {
         f2code.put("WRITE", DLXInstruction.WRD);
         
         f1code.put("WRITE NEW LINE", DLXInstruction.WRL);
+        
+        arithmeticInstructions.add("ADD");
+        arithmeticInstructions.add("SUB");
+        arithmeticInstructions.add("MUL");
+        arithmeticInstructions.add("DIV");
+        arithmeticInstructions.add("CMP");
+
+        branchInstructions.add("BRA");
+        branchInstructions.add("BNE");
+        branchInstructions.add("BEQ");
+        branchInstructions.add("BLT");
+        branchInstructions.add("BLE");
+        branchInstructions.add("BGE");
+        branchInstructions.add("BGT");
+
     }
     
     /*
@@ -94,8 +112,36 @@ public class MachineCode {
     public void generateCode() {
         Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(FinalInstructions.finalInstructions);
         
-        for (Instruction inst : allInstructions.values()) {
-            
+        
+        for (Instruction instr : allInstructions.values()) {
+            int a = 0; 
+            int b = 0;
+            int c = 0;
+            if (arithmeticInstructions.contains(instr.operation)) {
+                if (instr.op1.kind == Result.Kind.CONST || instr.op2.kind == Result.Kind.CONST) {
+                    if (instr.op1.kind == Result.Kind.CONST) {
+                        c = instr.op1.value;
+                        b = instr.op1.version;
+                    } else {
+                        c = instr.op2.value;
+                    }
+//                    putF1(f1code.get(instr.operation), );
+                } else {
+                    
+                }
+            } else if (branchInstructions.contains(instr.operation)) {
+                
+            } else if (instr.operation == "RET") {
+                
+            } else if (instr.operation == "READ") {
+                
+            } else if (instr.operation == "WRITE") {
+                
+            } else if (instr.operation == "WRITE NEW LINE") {
+                
+            } else {
+                System.out.println("ERROR : Instruction operation does not match any known op");
+            }
         }
         
         
@@ -103,5 +149,17 @@ public class MachineCode {
         // Assuming each op of each line is either a constant or a register
         
         
+    }
+    
+    private void putF1(int op, int a, int b, int c) {
+        buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0xFFFF;
+    }
+    
+    private void putF2(int op, int a, int b, int c) {
+        buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0x1F;
+    }
+    
+    private void putF3(int op, int oper) {
+        buf[pc++] = op << 26 | oper;
     }
 }
