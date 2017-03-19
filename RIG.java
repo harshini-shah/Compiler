@@ -83,4 +83,10 @@ public class RIG {
 		}
 		return node;
 	}
+	
+	public boolean isEdge(Instruction instr1, Instruction instr2){
+		RIGNode node1 = _rig.get(instr1);
+		RIGNode node2 = _rig.get(instr2);
+		return node1.get_neighbors().contains(node2) && node2.get_neighbors().contains(node1);
+	}
 }

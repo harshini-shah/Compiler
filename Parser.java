@@ -16,7 +16,7 @@ import java.util.Set;
 public class Parser {
     private Scanner scanner;
     private String fileIndex;
-    private static int _lineNum = 1;
+    public static int _lineNum = 1;
     public static Map<String, Identifier> symbolTable;
     public Set<Integer> relationOperators;
 
@@ -87,6 +87,7 @@ public class Parser {
                         Instruction instr = new Instruction();
                         instr.kind = Instruction.Kind.END;
                         instr.operation = "EOF";
+                        instr.thisBlock = finalBlock;
                         finalBlock.instructions.put(_lineNum, instr);
                         
                         if (scanner.sym != Token.periodToken) {
@@ -240,6 +241,7 @@ public class Parser {
         instr.op2 = new Result();
         instr.op2.kind = Result.Kind.VAR;
         instr.op2.name = x.name + "_BaseAddress";
+        instr.thisBlock = currBlock;
         Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
         x.kind = Result.Kind.INSTR;
@@ -316,6 +318,7 @@ public class Parser {
             instr.operation = OpCode.get(op);
             instr.op1 = new Result(x);
             instr.op2 = y;
+            instr.thisBlock = currBlock;
             Instruction.allInstructions.put(_lineNum, instr);
             currBlock.instructions.put(_lineNum++, instr);
             x.kind = Result.Kind.INSTR;
@@ -384,6 +387,7 @@ public class Parser {
         instr.instructionNumber = _lineNum;
         instr.op1 = x;
         instr.operation = OpCode.get(NegatedBranchOp.get(x.cond));
+        instr.thisBlock = currBlock;
         Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
     }
@@ -398,6 +402,7 @@ public class Parser {
         instr.instructionNumber = _lineNum;
         instr.op1 = new Result(x);
         instr.operation = OpCode.get(Token.branchToken);
+        instr.thisBlock = currBlock;
         Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
         x.fixupLocation = _lineNum - 1;
@@ -645,6 +650,7 @@ public class Parser {
                     instr.op2 = op2;
                     instr.op3 = op3;
                     instr.instructionNumber = _lineNum;
+                    instr.thisBlock = joinBlock;
                     Instruction.allInstructions.put(_lineNum, instr);
                     joinBlock.instructions.put(_lineNum++, instr);
                 }
@@ -877,6 +883,7 @@ public class Parser {
             instr.kind = Instruction.Kind.FUNC;
             instr.operation = "WRITE";
             instr.op1 = y;
+            instr.thisBlock = currBlock;
             Instruction.allInstructions.put(_lineNum, instr);
             instr.instructionNumber = _lineNum;
             currBlock.instructions.put(_lineNum++, instr);
@@ -884,6 +891,7 @@ public class Parser {
             Instruction instr = new Instruction();
             instr.kind = Instruction.Kind.FUNC;
             instr.operation = "READ";
+            instr.thisBlock = currBlock;
             Instruction.allInstructions.put(_lineNum, instr);
             instr.instructionNumber = _lineNum;
             currBlock.instructions.put(_lineNum++, instr);
@@ -891,6 +899,7 @@ public class Parser {
             Instruction instr = new Instruction();
             instr.kind = Instruction.Kind.FUNC;
             instr.operation = "WRITE NEW LINE";
+            instr.thisBlock = currBlock;
             Instruction.allInstructions.put(_lineNum, instr);
             instr.instructionNumber = _lineNum;
             currBlock.instructions.put(_lineNum++, instr);
@@ -958,6 +967,7 @@ public class Parser {
                currBlock.arrNames.add(x.name);
                 Instruction instr = new Instruction();
                 instr.operation =  "ARR " + x.name + " defined";
+                instr.thisBlock = currBlock;
                 Instruction.allInstructions.put(_lineNum, instr);
                 currBlock.instructions.put(_lineNum++, instr);
                 List<Integer> list = new ArrayList<Integer>();
@@ -983,6 +993,7 @@ public class Parser {
                     currBlock.arrNames.add(x.name);
                     Instruction instr2 = new Instruction();
                     instr2.operation =  "ARR " + x.name + " defined";
+                    instr2.thisBlock = currBlock;
                     Instruction.allInstructions.put(_lineNum, instr2);
                     currBlock.instructions.put(_lineNum++, instr2);
                     List<Integer> list2 = new ArrayList<Integer>();

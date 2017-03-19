@@ -8,11 +8,15 @@ public class RegisterAllocation {
 	private RIG _interferenceGraph;
 	private Map<Integer, BlockData> _blockStats;
 	private Set<Integer> _whileJoinBlockIds;
+	private Map<Instruction, Set<Instruction>> _clusters;
+	public Map<Integer, Integer> registerMapping;
 	
 	public RegisterAllocation(){
 		_interferenceGraph = new RIG();
 		_blockStats = new HashMap<Integer, BlockData>();
 		_whileJoinBlockIds = new HashSet<Integer>();
+		_clusters = new HashMap<Instruction, Set<Instruction>>();
+		registerMapping = new HashMap<Integer, Integer>();
 	}
 	
 	public RIG getRIG(){
@@ -44,26 +48,160 @@ public class RegisterAllocation {
 			allocateReg();
 		}
 		
+		
 		_interferenceGraph.addNode(instr, node);
-		Set<Integer> colorsN = new HashSet<Integer>();
-		for(RIGNode n : node.get_neighbors()){
-			colorsN.add(n.get_instr().regNo);
-		}
-		int color = 1;
-		boolean colored = false;
-		while(!colored && color < 32){
-			if(!colorsN.contains(color)){
-				instr.regNo = color;
-				colored = true;
+		if(!isClusterMember(instr)){
+			Set<Integer> colorsN = new HashSet<Integer>();
+			for(RIGNode n : node.get_neighbors()){
+				colorsN.add(n.get_instr().regNo);
+			}
+			boolean op3Move = false, op2Move = false, opsInterfere =false;
+			if(instr.kind == Instruction.Kind.PHI){
+				Instruction instr2 = null;
+				Instruction instr3 = null;
+				if(instr.op2 != null && instr.op2.kind == Result.Kind.INSTR){
+					instr2 = Instruction.allInstructions.get(instr.op2.version);
+				}else if(instr.op2 != null && instr.op2.kind == Result.Kind.CONST){
+					op2Move = true;
+				}
+				
+				if(instr.op3 != null && instr.op3.kind == Result.Kind.INSTR){
+					instr3 = Instruction.allInstructions.get(instr.op3.version);
+				}else if(instr.op3 != null && instr.op3.kind == Result.Kind.CONST){
+					op3Move = true;
+				}
+				
+				if(instr2 != null || instr3 != null ){
+					if(instr2 != null && instr3 == null){
+						if(!_interferenceGraph.isEdge(instr, instr2)){
+							for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+								colorsN.add(n.get_instr().regNo);
+							}
+						}else{
+							op2Move = true;
+						}
+					}else if(instr2 == null && instr3 != null){
+						if(!_interferenceGraph.isEdge(instr, instr3)){
+							for(RIGNode n : _interferenceGraph.getNode(instr3).get_neighbors()){
+								colorsN.add(n.get_instr().regNo);
+							}
+						}else{
+							op3Move = true;
+						}
+					}else{
+						if(_interferenceGraph.isEdge(instr2, instr3)){
+							opsInterfere = true;
+							if(!_interferenceGraph.isEdge(instr, instr2) && _interferenceGraph.isEdge(instr, instr3)){
+								for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+									colorsN.add(n.get_instr().regNo);
+								}
+								op3Move = true;
+							}else if(!_interferenceGraph.isEdge(instr, instr3) && _interferenceGraph.isEdge(instr, instr2)){
+								for(RIGNode n : _interferenceGraph.getNode(instr3).get_neighbors()){
+									colorsN.add(n.get_instr().regNo);
+								}
+								op2Move = true;
+							}else{
+								if(_interferenceGraph.isEdge(instr, instr3) && _interferenceGraph.isEdge(instr, instr2)){
+									op2Move = true;
+									op3Move = true;
+								}else{
+									for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+										colorsN.add(n.get_instr().regNo);
+									}
+									op3Move = true;
+								}
+							}
+						}else{
+//							if (_interferenceGraph.isEdge(instr, instr2) && _interferenceGraph.isEdge(instr, instr3)) {
+//								
+//							}
+							if(!_interferenceGraph.isEdge(instr, instr2)){
+								for(RIGNode n : _interferenceGraph.getNode(instr2).get_neighbors()){
+									colorsN.add(n.get_instr().regNo);
+								}
+							}else{
+								op2Move = true;
+							}
+							
+							if(!_interferenceGraph.isEdge(instr, instr3)){
+								for(RIGNode n : _interferenceGraph.getNode(instr3).get_neighbors()){
+									colorsN.add(n.get_instr().regNo);
+								}
+							}else{
+								op3Move = true;
+							}
+						}
+					}
+				}
+			}
+			
+			int color = 1;
+			boolean colored = false;
+			while(!colored && color < 32){
+				if(!colorsN.contains(color)){
+					instr.regNo = color;
+					colored = true;
+				}
+				if(!colored){
+					color++;
+				}
+			}
+			
+			registerMapping.put(instr.instructionNumber, instr.regNo);
+			if(instr.kind == Instruction.Kind.PHI && colored){
+				if (instr.op2.kind == Result.Kind.INSTR) {
+					registerMapping.put(instr.instructionNumber, instr.regNo);
+				}
+				
+				if (instr.op3.kind == Result.Kind.INSTR) {
+					registerMapping.put(instr.instructionNumber, instr.regNo);
+				}
+				
+				
+				if (op2Move) {
+					generateMoveInstruction(instr.op2, instr.regNo, instr);
+				}else{
+					Instruction instr2 = Instruction.allInstructions.get(instr.op2.version);
+					instr2.regNo = instr.regNo;
+				}
+				
+				if (op3Move) {
+					generateMoveInstruction(instr.op3, instr.regNo, instr);
+				}else{
+					Instruction instr2 = Instruction.allInstructions.get(instr.op3.version);
+					instr2.regNo = instr.regNo;
+				}
 			}
 			if(!colored){
-				color++;
+				System.out.println("Spilled Instruction" + instr.toString());
 			}
 		}
-		if(!colored){
-			System.out.println("Error: No color assigned to the instr" + instr.toString());
-		}
 	}
+	
+	private void generateMoveInstruction(Result res, int regNum, Instruction phi) {
+		Instruction instr = new Instruction();
+		instr.kind = Instruction.Kind.STD;
+		instr.op2 = res;
+		Result register = new Result();
+		register.kind = Result.Kind.REG;
+		register.value = regNum;
+		instr.operation = "MOV";
+		instr.instructionNumber = Parser._lineNum;
+		instr.thisBlock = phi.thisBlock;
+		phi.thisBlock.instructions.put(Parser._lineNum++, instr);
+		
+	}
+	
+	private boolean isClusterMember(Instruction instr){
+		for(Set<Instruction> mem : _clusters.values()){
+			if(mem.contains(instr)){
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	
 	private Set<Instruction> calculateLiveRange(BasicBlock node, BasicBlock parent, int pass){
 		Set<Instruction> live = new HashSet<Instruction>();
@@ -157,7 +295,14 @@ public class RegisterAllocation {
 		}
 		for (Instruction ent : blockInstructionsReverse) {
 			if(!ent.isDeleted && ent.kind == Instruction.Kind.PHI){
-				
+				if(!_clusters.containsKey(ent)){
+					Set<Instruction> clusterMembers = new HashSet<Instruction>();
+					if(ent.op2 != null && ent.op2.kind == Result.Kind.INSTR)
+						clusterMembers.add(Instruction.allInstructions.get(ent.op2.version));
+					if(ent.op3 != null && ent.op3.kind == Result.Kind.INSTR)
+						clusterMembers.add(Instruction.allInstructions.get(ent.op3.version));
+					_clusters.put(ent, clusterMembers);
+				}
 				//i : op op1 op2
 				//live = live - {i}
 				if((node.kind == BasicBlock.Kind.WHILE && branch == 1) || node.kind != BasicBlock.Kind.WHILE){

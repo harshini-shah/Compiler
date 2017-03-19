@@ -14,6 +14,7 @@ public class Instruction {
     public int instructionNumber;
     public boolean isDeleted;
     public int regNo;
+    public BasicBlock thisBlock;
     public static Map<Integer, Instruction> allInstructions = new HashMap<Integer, Instruction>();
     
     public Instruction() {
