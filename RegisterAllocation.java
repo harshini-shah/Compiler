@@ -70,8 +70,6 @@ public class RegisterAllocation {
 							int memColor = colorNode(n, mem, color);
 							if (memColor == color){
 								registerMapping.put(mem.instructionNumber, mem.regNo);
-							}else{
-								break;
 							}
 						}
 					}
@@ -128,6 +126,7 @@ public class RegisterAllocation {
 		instr.op1 = s;
 		instr.op2 = dest;
 		instr.instructionNumber = Parser._lineNum;
+		instr.regNo = destReg;
 		if(branch == 1){
 			instr.thisBlock = current.leftParent;
 			current.leftParent.instructions.put(Parser._lineNum++, instr);
