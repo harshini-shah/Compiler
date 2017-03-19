@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -9,7 +10,7 @@ public class RegisterAllocation {
 	private RIG _graphCopy;
 	private Map<Integer, BlockData> _blockStats;
 	private Set<Integer> _whileJoinBlockIds;
-	private Map<Instruction, Set<Integer>> _clusters;
+	private List<Set<Instruction>> _clusters;
 	public Map<Integer, Integer> registerMapping;
 	
 	public RegisterAllocation(){
@@ -17,7 +18,7 @@ public class RegisterAllocation {
 		_graphCopy = new RIG();
 		_blockStats = new HashMap<Integer, BlockData>();
 		_whileJoinBlockIds = new HashSet<Integer>();
-		_clusters = new HashMap<Instruction, Set<Integer>>();
+		_clusters = new ArrayList<Set<Instruction>>();
 		registerMapping = new HashMap<Integer, Integer>();
 	}
 	
@@ -53,135 +54,33 @@ public class RegisterAllocation {
 		
 		
 		_interferenceGraph.addNode(instr, node);
-		if(!isClusterMember(instr)){
-			Set<Integer> colorsN = new HashSet<Integer>();
-			for(RIGNode n : node.get_neighbors()){
-				colorsN.add(n.get_instr().regNo);
-			}
-			boolean op3Move = false, op2Move = false, opsInterfere =false;
-			if(instr.kind == Instruction.Kind.PHI){
-				Instruction instr2 = null;
-				Instruction instr3 = null;
-				if(instr.op2 != null && instr.op2.kind == Result.Kind.INSTR){
-					instr2 = Instruction.allInstructions.get(instr.op2.version);
-				}else if(instr.op2 != null && instr.op2.kind == Result.Kind.CONST){
-					op2Move = true;
-				}
-				
-				if(instr.op3 != null && instr.op3.kind == Result.Kind.INSTR){
-					instr3 = Instruction.allInstructions.get(instr.op3.version);
-				}else if(instr.op3 != null && instr.op3.kind == Result.Kind.CONST){
-					op3Move = true;
-				}
-				
-				if(instr2 != null || instr3 != null ){
-					if(instr2 != null && instr3 == null){
-						if(!_graphCopy.isEdge(instr, instr2)){
-							for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
-								colorsN.add(n.get_instr().regNo);
-							}
-						}else{
-							op2Move = true;
-						}
-					}else if(instr2 == null && instr3 != null){
-						if(!_graphCopy.isEdge(instr, instr3)){
-							for(RIGNode n : _graphCopy.getNode(instr3).get_neighbors()){
-								colorsN.add(n.get_instr().regNo);
-							}
-						}else{
-							op3Move = true;
-						}
-					}else{
-						if(_graphCopy.isEdge(instr2, instr3)){
-							opsInterfere = true;
-							if(!_graphCopy.isEdge(instr, instr2) && _graphCopy.isEdge(instr, instr3)){
-								for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
-									colorsN.add(n.get_instr().regNo);
-								}
-								op3Move = true;
-							}else if(!_graphCopy.isEdge(instr, instr3) && _graphCopy.isEdge(instr, instr2)){
-								for(RIGNode n : _graphCopy.getNode(instr3).get_neighbors()){
-									colorsN.add(n.get_instr().regNo);
-								}
-								op2Move = true;
+		node = _graphCopy.getNode(instr);
+		if(!registerMapping.containsKey(instr.instructionNumber)){
+			Set<Instruction> cluster = getCluster(instr);
+			if(cluster != null){
+				int color = colorNode(node, instr, -1);
+				registerMapping.put(instr.instructionNumber, instr.regNo);
+				if(color != -1){
+					for(Instruction mem : cluster){
+						if(!registerMapping.containsKey(mem.instructionNumber)){
+							RIGNode n = _graphCopy.getNode(mem);
+							int memColor = colorNode(n, mem, color);
+							if (memColor == color){
+								registerMapping.put(mem.instructionNumber, mem.regNo);
 							}else{
-								if(_graphCopy.isEdge(instr, instr3) && _graphCopy.isEdge(instr, instr2)){
-									op2Move = true;
-									op3Move = true;
-								}else{
-									for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
-										colorsN.add(n.get_instr().regNo);
-									}
-									op3Move = true;
-								}
-							}
-						}else{
-//							if (_interferenceGraph.isEdge(instr, instr2) && _interferenceGraph.isEdge(instr, instr3)) {
-//								
-//							}
-							if(!_graphCopy.isEdge(instr, instr2)){
-								for(RIGNode n : _graphCopy.getNode(instr2).get_neighbors()){
-									colorsN.add(n.get_instr().regNo);
-								}
-							}else{
-								op2Move = true;
-							}
-							
-							if(!_graphCopy.isEdge(instr, instr3)){
-								for(RIGNode n : _graphCopy.getNode(instr3).get_neighbors()){
-									colorsN.add(n.get_instr().regNo);
-								}
-							}else{
-								op3Move = true;
+								break;
 							}
 						}
 					}
 				}
-			}
-			
-			int color = 1;
-			boolean colored = false;
-			while(!colored && color < 32){
-				if(!colorsN.contains(color)){
-					instr.regNo = color;
-					colored = true;
-				}
-				if(!colored){
-					color++;
-				}
-			}
-			
-			registerMapping.put(instr.instructionNumber, instr.regNo);
-			if(instr.kind == Instruction.Kind.PHI && colored){
-				if (instr.op2.kind == Result.Kind.INSTR) {
-					registerMapping.put(instr.op2.version, instr.regNo);
-				}
 				
-				if (instr.op3.kind == Result.Kind.INSTR) {
-					registerMapping.put(instr.op3.version, instr.regNo);
-				}
+			}else if(cluster == null){
+				int color = colorNode(node, instr, -1);
+				registerMapping.put(instr.instructionNumber, instr.regNo);
 				
-				
-				if (op2Move) {
-					generateMoveInstruction(instr.op2, instr.regNo, instr);
-					Instruction instr2 = Instruction.allInstructions.get(instr.op2.version);
-					instr2.regNo = instr.regNo;
-				}else{
-					Instruction instr2 = Instruction.allInstructions.get(instr.op2.version);
-					instr2.regNo = instr.regNo;
+				if(color == -1){
+					System.out.println("Spilled Instruction" + instr.toString());
 				}
-				
-				if (op3Move) {
-					generateMoveInstruction(instr.op3, instr.regNo, instr);
-					Instruction instr2 = Instruction.allInstructions.get(instr.op3.version);
-					instr2.regNo = instr.regNo;
-				}else{
-					Instruction instr2 = Instruction.allInstructions.get(instr.op3.version);
-					instr2.regNo = instr.regNo;
-				}
-			}
-			if(!colored){
-				System.out.println("Spilled Instruction" + instr.toString());
 			}
 		}
 	}
@@ -200,13 +99,40 @@ public class RegisterAllocation {
 		
 	}
 	
-	private boolean isClusterMember(Instruction instr){
-		for(Set<Integer> mem : _clusters.values()){
-			if(mem.contains(instr.instructionNumber)){
-				return true;
+	private int colorNode(RIGNode node, Instruction instr, int color){
+		Set<Integer> colorsN = new HashSet<Integer>();
+		for(RIGNode ne : node.get_neighbors()){
+			colorsN.add(ne.get_instr().regNo);
+		}
+		if(color == -1){
+			color = 1;
+			boolean colored = false;
+			while(!colored && color < 32){
+				if(!colorsN.contains(color)){
+					instr.regNo = color;
+					colored = true;
+				}
+				if(!colored){
+					color++;
+				}
+			}
+		}else{
+			if(!colorsN.contains(color)){
+				instr.regNo = color;
+			}else{
+				color = -1;
 			}
 		}
-		return false;
+		return color;
+	}
+	
+	private Set<Instruction> getCluster(Instruction instr){
+		for(Set<Instruction> mem : _clusters){
+			if(mem.contains(instr)){
+				return mem;
+			}
+		}
+		return null;
 	}
 	
 	
@@ -302,13 +228,31 @@ public class RegisterAllocation {
 		}
 		for (Instruction ent : blockInstructionsReverse) {
 			if(!ent.isDeleted && ent.kind == Instruction.Kind.PHI){
-				if(!_clusters.containsKey(ent)){
-					Set<Integer> clusterMembers = new HashSet<Integer>();
-					if(ent.op2 != null && ent.op2.kind == Result.Kind.INSTR)
-						clusterMembers.add(ent.op2.version);
-					if(ent.op3 != null && ent.op3.kind == Result.Kind.INSTR)
-						clusterMembers.add(ent.op3.version);
-					_clusters.put(ent, clusterMembers);
+				boolean existsInCluster = false;
+				for(Set<Instruction> mem : _clusters){
+					if(mem.contains(ent) || 
+							(ent.op2!= null && ent.op2.kind == Result.Kind.INSTR && mem.contains(Instruction.allInstructions.get(ent.op2.version))) ||
+							(ent.op3!= null && ent.op3.kind == Result.Kind.INSTR && mem.contains(Instruction.allInstructions.get(ent.op3.version)))){
+						mem.add(ent);
+						existsInCluster = true;
+						if(ent.op2!= null && ent.op2.kind == Result.Kind.INSTR){
+							mem.add(Instruction.allInstructions.get(ent.op2.version));
+						}
+						if(ent.op3 != null && ent.op3.kind == Result.Kind.INSTR){
+							mem.add(Instruction.allInstructions.get(ent.op3.version));
+						}
+					}
+				}
+				if(!existsInCluster){
+					Set<Instruction> newCluster = new HashSet<Instruction>();
+					newCluster.add(ent);
+					if(ent.op2!= null && ent.op2.kind == Result.Kind.INSTR){
+						newCluster.add(Instruction.allInstructions.get(ent.op2.version));
+					}
+					if(ent.op3 != null && ent.op3.kind == Result.Kind.INSTR){
+						newCluster.add(Instruction.allInstructions.get(ent.op3.version));
+					}
+					_clusters.add(newCluster);
 				}
 				//i : op op1 op2
 				//live = live - {i}
