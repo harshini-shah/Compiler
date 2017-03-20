@@ -120,6 +120,10 @@ public class MachineCode {
     public void generateCode() {
         FinalInstructions fi = new FinalInstructions(ra, cfg);
         Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);   
+        for (int ii : allInstructions.keySet()) {
+            System.out.println(ii + "\t" + allInstructions.get(ii));
+        }
+        
         boolean negate = false;
         for (Instruction instr : allInstructions.values()) {
             int a = 0; 
@@ -162,13 +166,18 @@ public class MachineCode {
                     
                     putF1(f1code.get("ADD"), instr.regNo, 0, c);
                 } else if (instr.op1.kind == Result.Kind.CONST || instr.op2.kind == Result.Kind.CONST) {
-                    System.out.println("HIIIIIIIIIIII");
+//                    System.out.println("HIIIIIIIIIIII");
                     if (instr.op1.kind == Result.Kind.CONST) {
+//                       System.out.println("hi " + instr.operation);
                         c = instr.op1.value;
                         b = instr.op2.regNo; 
                         negate = true;
-                        putF1(f1code.get(instr.operation), instr.regNo, b, c);
-
+//                        if (instr.operation.equals("SUB")) {
+//                            putF1(f1code.get(instr.operation), instr.regNo, b, c);
+//                        } else {
+                            putF1(f1code.get(instr.operation), instr.regNo, b, c);
+//                        }
+                        
                     } else {
                         c = instr.op2.value;
                         b = instr.op1.regNo; 
@@ -239,19 +248,19 @@ public class MachineCode {
     }
     
     private void putF1(int op, int a, int b, int c) {
-        System.out.println("F1" + " " + op + " " + a + " " + b + " " + c);
+//        System.out.println("F1" + " " + op + " " + a + " " + b + " " + c);
         
         buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0xFFFF;
     }
     
     private void putF2(int op, int a, int b, int c) {
-        System.out.println("F2" + " " +  op + " " + a + " " + b + " " + c);
+//        System.out.println("F2" + " " +  op + " " + a + " " + b + " " + c);
 
         buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0x1F;
     }
     
     private void putF3(int op, int oper) {
-        System.out.println("F3" + " " + op + " " + oper);
+//        System.out.println("F3" + " " + op + " " + oper);
 
         buf[pc++] = op << 26 | oper;
     }

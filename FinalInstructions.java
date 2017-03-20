@@ -45,11 +45,21 @@ public class FinalInstructions {
         for (Integer lineNum : toBeChanged) {
             Instruction inst = finalInstructions.get(lineNum);
             
-            if (nextInstructions.containsKey(inst.op1.fixupLocation) && old2new.containsKey(inst.op1.fixupLocation)) {
-                inst.op1.fixupLocation = old2new.get(nextInstructions.get(inst.op1.fixupLocation));
-                finalInstructions.put(lineNum, inst);
+            if (nextInstructions.containsKey(inst.op1.fixupLocation)) {
+                inst.op1.fixupLocation = nextInstructions.get(inst.op1.fixupLocation);
+                while (!old2new.containsKey(inst.op1.fixupLocation)) {
+                    inst.op1.fixupLocation = nextInstructions.get(inst.op1.fixupLocation);
+                }
+                inst.op1.fixupLocation = old2new.get(inst.op1.fixupLocation);
+              finalInstructions.put(lineNum, inst);
+
                 continue;
             }
+//            while (nextInstructions.containsKey(inst.op1.fixupLocation) && old2new.containsKey(inst.op1.fixupLocation)) {
+//                inst.op1.fixupLocation = old2new.get(nextInstructions.get(inst.op1.fixupLocation));
+//                finalInstructions.put(lineNum, inst);
+//                continue;
+//            }
             while (!old2new.containsKey(inst.op1.fixupLocation)) {
                 
                 inst.op1.fixupLocation++;
@@ -62,19 +72,27 @@ public class FinalInstructions {
     private void getFinalInstructions() {
         // Iterate over each block (from the list of blocks), and then over each instruction in that
         // block in order (check if the function is right)
-                    
+                int count = 0;    
             for (BasicBlock block : cfg.bbs) {
                 ArrayList<Instruction> instructions = (ArrayList<Instruction>) block.getOrderedInstructions();
+//                System.out.println("BLOCK " + block.blockId);
+                
                 for (int i = 0; i < instructions.size(); i++) {
+                    
                     Instruction instr = instructions.get(i);
                     if (instr.isDeleted) {
                         continue;
                     }
+//                    System.out.println("Instruction: " + instr.instructionNumber + "\t" + instr);
+
                     if (instr.kind == Instruction.Kind.PHI) {
                         // do nothing
                         if (i != instructions.size() - 1) {
                             nextInstructions.put(instr.instructionNumber, instructions.get(i + 1).instructionNumber);
                         }
+//                        for (int jj : nextInstructions.keySet()) {
+//                            System.out.println(jj + " -- > " + nextInstructions.get(jj));
+//                        }
                     } else if (instr.kind == Instruction.Kind.BRANCH) {
                         
                         // the op1 of the instruction is where it should branch to - will be of type instruction
@@ -91,69 +109,65 @@ public class FinalInstructions {
                                     System.out.println("ERROR : Branch Op is of kind " + instr.op1.kind);
                                 }
                                 
-                                
-                                instr.op2 = new Result();
-                                instr.op2.kind = Result.Kind.INSTR;
+                                Instruction newInstr = new Instruction(instr);
+                                newInstr.op2 = new Result();
+                                newInstr.op2.kind = Result.Kind.INSTR;
                                 int cnt = 1;
                                 while (!old2new.containsKey(instr.instructionNumber - cnt)) {
                                     cnt++;
                                 }
-                                instr.op2.version = old2new.get(instr.instructionNumber - cnt);
-                                instr.op3 = null;
+                                newInstr.op2.version = old2new.get(instr.instructionNumber - cnt);
+                                newInstr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber);
-                                instr.instructionNumber = instructionNumber;
+                                newInstr.instructionNumber = instructionNumber;
                                 toBeChanged.add(instructionNumber);
-                                finalInstructions.put(instructionNumber++, instr);
+                                finalInstructions.put(instructionNumber++, newInstr);
                                 break;
                             default: 
                                 System.out.println("ERROR: Branch instruction doesn't match any branch opcode");
                         }
                     } else if (instr.kind == Instruction.Kind.END) {
-                        instr.operation = "RET";
-                        instr.op1 = new Result();
-                        instr.op1.kind = Result.Kind.CONST;
-                        instr.op1.value = 0;
-                        instr.op2 = null;
-                        instr.op3 = null;
+                        Instruction newInstr = new Instruction(instr);
+                        newInstr.operation = "RET";
+                        newInstr.op1 = new Result();
+                        newInstr.op1.kind = Result.Kind.CONST;
+                        newInstr.op1.value = 0;
+                        newInstr.op2 = null;
+                        newInstr.op3 = null;
                         old2new.put(instr.instructionNumber, instructionNumber);
-                        instr.instructionNumber = instructionNumber;
-                        finalInstructions.put(instructionNumber++, instr);
+                        newInstr.instructionNumber = instructionNumber;
+                        finalInstructions.put(instructionNumber++, newInstr);
                     } else if (instr.kind == Instruction.Kind.FUNC) {
                         switch (instr.operation) {
-                            case "WRITE NEW LINE":
-                                instr.op1 = null;
-                                instr.op2 = null;
-                                instr.op3 = null;
-                                old2new.put(instr.instructionNumber, instructionNumber);
-                                instr.instructionNumber = instructionNumber;
-                                finalInstructions.put(instructionNumber++, instr);
-                                break;
+                            case "WRITE NEW LINE":                                
                             case "READ":
-                                instr.op1 = null;
-                                instr.op2 = null;
-                                instr.op3 = null;
+                                Instruction newInstr = new Instruction(instr);
+                                newInstr.op1 = null;
+                                newInstr.op2 = null;
+                                newInstr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber);
-                                instr.instructionNumber = instructionNumber;
-                                finalInstructions.put(instructionNumber++, instr);
+                                newInstr.instructionNumber = instructionNumber;
+                                finalInstructions.put(instructionNumber++, newInstr);
                                 break;
                             case "WRITE":
+                                Instruction Instr = new Instruction(instr);
                                 if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op is of kind " + instr.op1.kind);
                                 } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                    instr.op1.kind = Result.Kind.REG;
+                                    Instr.op1.kind = Result.Kind.REG;
 //                                    for (int i : old2new.keySet()) {
 //                                        System.out.println("Old 2 new : " + i + " " + old2new.get(i));
 //                                    }
 //                                    System.out.println(instr.op1.version);
                                     
-                                    instr.op1.regNo = ra.registerMapping.get(instr.op1.version);
+                                    Instr.op1.regNo = ra.registerMapping.get(instr.op1.version);
                                 }
                                 
-                                instr.op2 = null;
-                                instr.op3 = null;
+                                Instr.op2 = null;
+                                Instr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber);
-                                instr.instructionNumber = instructionNumber;
-                                finalInstructions.put(instructionNumber++, instr);
+                                Instr.instructionNumber = instructionNumber;
+                                finalInstructions.put(instructionNumber++, Instr);
                                 break;
                             default:
 //                                instr.op2 = null;
@@ -179,23 +193,24 @@ public class FinalInstructions {
                                     }
                                     toBeChanged.add(instructionNumber - 1);
                                 
-                                
+                                Instruction newInstr = new Instruction(instr);
+
                                 if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op 1 is of kind " + instr.op1.kind);
                                 } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                    instr.op1.kind = Result.Kind.REG;
-                                    instr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
+                                    newInstr.op1.kind = Result.Kind.REG;
+                                    newInstr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
                                 
                                 if (instr.op2.kind != Result.Kind.CONST && instr.op2.kind != Result.Kind.INSTR && instr.op2.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op 2 is of kind " + instr.op2.kind);
                                 } else if (instr.op2.kind == Result.Kind.INSTR) {
-                                    instr.op2.kind = Result.Kind.REG;
-                                    instr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
+                                    newInstr.op2.kind = Result.Kind.REG;
+                                    newInstr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
                                 
-                                instr.op3 = null;
+                                newInstr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber - 2);
-                                instr.instructionNumber = instructionNumber - 2;
-                                finalInstructions.put(instructionNumber - 2, instr);
+                                newInstr.instructionNumber = instructionNumber - 2;
+                                finalInstructions.put(instructionNumber - 2, newInstr);
                                 } else {
                                     finalInstructions.put(instructionNumber++, finalInstructions.get(instructionNumber - 2));
                                     finalInstructions.put(instructionNumber - 2, finalInstructions.get(instructionNumber - 3));
@@ -206,42 +221,43 @@ public class FinalInstructions {
                                     }
                                     toBeChanged.add(instructionNumber - 1);
                                 
-                                
+                                Instruction newInstr = new Instruction(instr);
                                 if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op 1 is of kind " + instr.op1.kind);
                                 } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                    instr.op1.kind = Result.Kind.REG;
-                                    instr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
+                                    newInstr.op1.kind = Result.Kind.REG;
+                                    newInstr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
                                 
                                 if (instr.op2.kind != Result.Kind.CONST && instr.op2.kind != Result.Kind.INSTR && instr.op2.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op 2 is of kind " + instr.op2.kind);
                                 } else if (instr.op2.kind == Result.Kind.INSTR) {
-                                    instr.op2.kind = Result.Kind.REG;
-                                    instr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
+                                    newInstr.op2.kind = Result.Kind.REG;
+                                    newInstr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
                                 
-                                instr.op3 = null;
+                                newInstr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber - 3);
-                                instr.instructionNumber = instructionNumber - 3;
-                                finalInstructions.put(instructionNumber - 3, instr);
+                                newInstr.instructionNumber = instructionNumber - 3;
+                                finalInstructions.put(instructionNumber - 3, newInstr);
                                 }
                                 
                             } else {
+                                Instruction newInstr = new Instruction(instr);
                                 if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op 1 is of kind " + instr.op1.kind);
                                 } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                    instr.op1.kind = Result.Kind.REG;
-                                    instr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
+                                    newInstr.op1.kind = Result.Kind.REG;
+                                    newInstr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
                                 
                                 if (instr.op2.kind != Result.Kind.CONST && instr.op2.kind != Result.Kind.INSTR && instr.op2.kind != Result.Kind.REG) {
                                     System.out.println("ERROR : Op 2 is of kind " + instr.op2.kind);
                                 } else if (instr.op2.kind == Result.Kind.INSTR) {
-                                    instr.op2.kind = Result.Kind.REG;
-                                    instr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
+                                    newInstr.op2.kind = Result.Kind.REG;
+                                    newInstr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
                                 
-                                instr.op3 = null;
+                                newInstr.op3 = null;
                                 old2new.put(instr.instructionNumber, instructionNumber);
-                                instr.instructionNumber = instructionNumber;
-                                finalInstructions.put(instructionNumber++, instr);
+                                newInstr.instructionNumber = instructionNumber;
+                                finalInstructions.put(instructionNumber++, newInstr);
                             }
                             
                             break;
@@ -250,34 +266,40 @@ public class FinalInstructions {
                         case "MUL":
                         case "DIV":
                         case "CMP":
+                            Instruction Instr = new Instruction(instr);
                             if (instr.op1.kind != Result.Kind.CONST && instr.op1.kind != Result.Kind.INSTR && instr.op1.kind != Result.Kind.REG) {
                                 System.out.println("ERROR : Op 1 is of kind " + instr.op1.kind);
                             } else if (instr.op1.kind == Result.Kind.INSTR) {
-                                instr.op1.kind = Result.Kind.REG;
-                                instr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
+                                Instr.op1.kind = Result.Kind.REG;
+                                Instr.op1.regNo = ra.registerMapping.get(instr.op1.version);                            }
                             
                             if (instr.op2.kind != Result.Kind.CONST && instr.op2.kind != Result.Kind.INSTR && instr.op2.kind != Result.Kind.REG) {
                                 System.out.println("ERROR : Op 2 is of kind " + instr.op2.kind);
                             } else if (instr.op2.kind == Result.Kind.INSTR) {
-                                instr.op2.kind = Result.Kind.REG;
-                                instr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
+                                Instr.op2.kind = Result.Kind.REG;
+                                Instr.op2.regNo = ra.registerMapping.get(instr.op2.version);                            }
                             
-                            instr.op3 = null;
+                            Instr.op3 = null;
                             old2new.put(instr.instructionNumber, instructionNumber);
-                            instr.instructionNumber = instructionNumber;
-                            finalInstructions.put(instructionNumber++, instr);
+                            Instr.instructionNumber = instructionNumber;
+                            finalInstructions.put(instructionNumber++, Instr);
                             break;
                         case "RET":
                         case "CALL":
-                            finalInstructions.put(instructionNumber++, instr);
+                            Instruction newInstr = new Instruction(instr);
+                            finalInstructions.put(instructionNumber++, newInstr);
                             break;
                         case "ADDA":
                         default:
                             System.out.println("ERROR : The instruction operation is not any standard instr " + instr.operation);
                         }
                     }
-                
+//                
             }
         }
+            
+//            for (int i : old2new.keySet()) {
+//                System.out.println(i + " becomes " + old2new.get(i));
+//            }
     }
 }
