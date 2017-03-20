@@ -43,7 +43,7 @@ public class DLXMachine {
             
             disassem(M[PC]); // initializes op, a, b, c
             
-            System.out.println("op " + op + " a " + a + " b " + b + " c " + c);
+//            System.out.println("op " + op + " a " + a + " b " + b + " c " + c);
 //            System.out.println("R1 is :" + R[1]);
 //            System.out.println("R2 is :" + R[2]);
 //            System.out.println("R3 is :" + R[3]);

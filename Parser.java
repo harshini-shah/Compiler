@@ -157,12 +157,13 @@ public class Parser {
 		    vp.printCFG(cfg);
 		    
 		    // printing the final instructions
-		    FinalInstructions fi = new FinalInstructions(ra, cfg);
-		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
-		    for (int ii : finalInstructions.keySet()) {
-		        System.out.println(ii + "\t" + finalInstructions.get(ii) + "\t" + "R" + finalInstructions.get(ii).regNo);
-//		        System.out.println(finalInstructions.get(ii).regNo);
-		    }
+//		    FinalInstructions fi = new FinalInstructions(ra, cfg);
+//		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
+//		    System.out.println(finalInstructions.size());
+//		    for (int ii : finalInstructions.keySet()) {
+//		        System.out.println(ii + "\t" + finalInstructions.get(ii) + "\t" + "R" + finalInstructions.get(ii).regNo);
+////		        System.out.println(finalInstructions.get(ii).regNo);
+//		    }
 		    
 //		    MachineCode mc = new MachineCode(ra, cfg);
 //		    mc.generateCode();
@@ -180,7 +181,6 @@ public class Parser {
 //                // TODO Auto-generated catch block
 //                e.printStackTrace();
 //            }
-   
 		    
         }
     }
