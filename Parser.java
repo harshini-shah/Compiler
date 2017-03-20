@@ -91,6 +91,7 @@ public class Parser {
                         instr.kind = Instruction.Kind.END;
                         instr.operation = "EOF";
                         instr.thisBlock = finalBlock;
+                        instr.instructionNumber = _lineNum;
                         finalBlock.instructions.put(_lineNum, instr);
                         
                         if (scanner.sym != Token.periodToken) {
@@ -155,12 +156,12 @@ public class Parser {
 //		    vp.printRIG(ra.getRIG());
 		    
 		    // printing the final instructions
-//		    FinalInstructions fi = new FinalInstructions(ra, cfg);
-//		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
-//		    for (int ii : finalInstructions.keySet()) {
-//		        System.out.println(ii + "\t" + finalInstructions.get(ii) + "\t" + "R" + finalInstructions.get(ii).regNo);
-////		        System.out.println(finalInstructions.get(ii).regNo);
-//		    }
+		    FinalInstructions fi = new FinalInstructions(ra, cfg);
+		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
+		    for (int ii : finalInstructions.keySet()) {
+		        System.out.println(ii + "\t" + finalInstructions.get(ii) + "\t" + "R" + finalInstructions.get(ii).regNo);
+//		        System.out.println(finalInstructions.get(ii).regNo);
+		    }
 		    
 		    MachineCode mc = new MachineCode(ra, cfg);
 		    mc.generateCode();
@@ -171,15 +172,15 @@ public class Parser {
 //            System.out.println(Integer.toBinaryString(mc.buf[2]));
 
 		    
-		    DLXMachine.load(mc.buf);
-		    try {
-                DLXMachine.execute();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
+//		    DLXMachine.load(mc.buf);
+//		    try {
+//                DLXMachine.execute();
+//            } catch (IOException e) {
+//                // TODO Auto-generated catch block
+//                e.printStackTrace();
+//            }
 //		    
-//		    
+		    
         }
     }
     
@@ -246,19 +247,33 @@ public class Parser {
             int offset = 0;
             int nDims = dimensions.size();
             
-            int total = 1;
-            for (int j = 1; j < nDims; j++) {
-                total *= dimensions.get(j); 
+            for (int i = 0; i < nDims; i++) {
+                Result currDim = x.dimensions.get(i);
+                Result total = new Result();
+                total.kind = Result.Kind.CONST;
+                total.value = 1;
+                for (int j = i + 1; j < nDims; j++) {
+                    total.value *= dimensions.get(j);
+                }
+                Compute(currBlock, Token.timesToken, currDim, total);
+                
             }
+            
+//            for (int j = 1; j < nDims; j++) {
+//                total *= dimensions.get(j); 
+//            }
             
 //            for (int i = 0; i < x.dimensions.size(); i++) {
 //                offset += total*x.dimensions.get(i);
 //                
 //                
 //            }
-            Compute(currBlock, Token.timesToken, x.dimensions.get(0), dummy);
+//            Compute(currBlock, Token.timesToken, x.dimensions.get(0), dummy);
             generateAddressInstruction(currBlock, x, Token.plusToken);
-            Compute(currBlock, Token.addaToken, x, new Result(x.dimensions.get(0)));
+            Result temp = new Result();
+            temp.kind = Result.Kind.INSTR;
+            temp.version = _lineNum - 2;
+            Compute(currBlock, Token.addaToken, x, temp);
 //            if (x.dimensions.size() == 1) {
 //                Compute(currBlock, Token.timesToken, x.dimensions.get(0), dummy);
 //                generateAddressInstruction(currBlock, x, Token.plusToken);
@@ -779,7 +794,10 @@ public class Parser {
         copyVariables(currBlock, followBlock);
         
         Result x = new Result();
+        x.kind = Result.Kind.CONDN;
         Result follow = new Result();
+        follow.kind = Result.Kind.CONDN;
+
         follow.fixupLocation = _lineNum;
         
         if(scanner.sym == Token.whileToken){
@@ -897,6 +915,11 @@ public class Parser {
             if (scanner.sym == Token.becomesToken) {
                 scanner.next();
                 Result y = expression(currBlock);
+                
+//                if (x.kind == Result.Kind.ARR) {
+//                    
+//                }
+                
                 if (currBlock.variables.containsKey(x.name)) {
                     currBlock.variables.get(x.name).add(_lineNum);
                 } else {
@@ -975,6 +998,7 @@ public class Parser {
                 scanner.next();
                 
                 if (scanner.sym == Token.closeparanToken) {
+                    scanner.next();
                     Instruction.allInstructions.put(_lineNum, instr);
                     System.out.println();
                     currBlock.instructions.put(_lineNum++, instr);
@@ -1050,7 +1074,7 @@ public class Parser {
                 List<Integer> list = new ArrayList<Integer>();
                 list.add(-1);
                 currBlock.variables.put(x.name, list);
-                symbolTable.put(ident.name, ident);
+                symbolTable.put(x.name, ident);
             }
               
             while(scanner.sym == Token.commaToken){
@@ -1076,7 +1100,7 @@ public class Parser {
                     List<Integer> list2 = new ArrayList<Integer>();
                     list2.add(-1);
                     currBlock.variables.put(x.name, list2);
-                    symbolTable.put(ident2.name, ident2);
+                    symbolTable.put(x.name, ident2);
                 }
             }
             if(scanner.sym == Token.semiToken){
