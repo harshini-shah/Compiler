@@ -1,9 +1,15 @@
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.Stack;
+import java.util.TreeSet;
 
 public class RegisterAllocation {
 	private RIG _interferenceGraph;
@@ -35,6 +41,16 @@ public class RegisterAllocation {
 		public BlockData(){
 			liveWithinBlock = new HashSet<Instruction>();
 			visitCount = 0;
+		}
+	}
+	
+	private class MovesData{
+		public List<Instruction> moves;
+		public Set<Integer> destRegisters;
+		
+		public MovesData(){
+			moves = new ArrayList<Instruction>();
+			destRegisters = new HashSet<Integer>();
 		}
 	}
 	
@@ -87,6 +103,8 @@ public class RegisterAllocation {
 	}
 	
 	private void insertMoves(){
+		Map<BasicBlock, MovesData> movedata = new HashMap<BasicBlock, MovesData>();
+		
 		for(Map.Entry<Instruction, BasicBlock> entry : _phis.entrySet()){
 			Instruction instr2 = null;
 			Instruction instr3 = null;
@@ -95,20 +113,74 @@ public class RegisterAllocation {
 			if(entry.getKey().op3 != null && entry.getKey().op3.kind == Result.Kind.INSTR)
 				instr3 = Instruction.allInstructions.get(entry.getKey().op3.version);
 			if(instr2 != null && instr2.regNo != entry.getKey().regNo){
-				generateMoveInstruction(entry.getKey().regNo, instr2.regNo, entry.getValue(), 1, false);
+				Instruction newInstr = generateMoveInstruction(entry.getKey().regNo, instr2.regNo, false);
+				if(!movedata.containsKey(entry.getValue().leftParent)){
+					MovesData m = new MovesData();
+					m.moves.add(newInstr);
+					m.destRegisters.add(entry.getKey().regNo);
+					movedata.put(entry.getValue().leftParent, m);
+				}else{
+					movedata.get(entry.getValue().leftParent).moves.add(newInstr);
+					movedata.get(entry.getValue().leftParent).destRegisters.add(entry.getKey().regNo);
+				}
 			}else if(instr2 == null && entry.getKey().op2.kind == Result.Kind.CONST){
-				generateMoveInstruction(entry.getKey().regNo, entry.getKey().op2.value, entry.getValue(), 1, true);
+				Instruction newInstr = generateMoveInstruction(entry.getKey().regNo, entry.getKey().op2.value, true);
+				if(!movedata.containsKey(entry.getValue().leftParent)){
+					MovesData m = new MovesData();
+					m.moves.add(newInstr);
+					m.destRegisters.add(entry.getKey().regNo);
+					movedata.put(entry.getValue().leftParent, m);
+				}else{
+					movedata.get(entry.getValue().leftParent).moves.add(newInstr);
+					movedata.get(entry.getValue().leftParent).destRegisters.add(entry.getKey().regNo);
+				}
 			}
 			
 			if(instr3 != null && instr3.regNo != entry.getKey().regNo){
-				generateMoveInstruction(entry.getKey().regNo, instr3.regNo, entry.getValue(), 2, false);
+				Instruction newInstr = generateMoveInstruction(entry.getKey().regNo, instr3.regNo, false);
+				if(!movedata.containsKey(entry.getValue().rightParent)){
+					MovesData m = new MovesData();
+					m.moves.add(newInstr);
+					m.destRegisters.add(entry.getKey().regNo);
+					movedata.put(entry.getValue().rightParent, m);
+				}else{
+					movedata.get(entry.getValue().rightParent).moves.add(newInstr);
+					movedata.get(entry.getValue().rightParent).destRegisters.add(entry.getKey().regNo);
+				}
 			}else if(instr3 == null && entry.getKey().op3.kind == Result.Kind.CONST){
-				generateMoveInstruction(entry.getKey().regNo, entry.getKey().op3.value, entry.getValue(), 2, true);
+				Instruction newInstr = generateMoveInstruction(entry.getKey().regNo, entry.getKey().op3.value,true);
+				if(!movedata.containsKey(entry.getValue().rightParent)){
+					MovesData m = new MovesData();
+					m.moves.add(newInstr);
+					m.destRegisters.add(entry.getKey().regNo);
+					movedata.put(entry.getValue().rightParent, m);
+				}else{
+					movedata.get(entry.getValue().rightParent).moves.add(newInstr);
+					movedata.get(entry.getValue().rightParent).destRegisters.add(entry.getKey().regNo);
+				}
+			}
+		}
+		
+		for(Map.Entry<BasicBlock, MovesData> ent : movedata.entrySet()){
+			Stack<Instruction> movestack = new Stack<Instruction>();
+			while(!ent.getValue().moves.isEmpty()){
+				Iterator<Instruction> it = ent.getValue().moves.iterator();
+				while(it.hasNext()){
+					Instruction mo = it.next();
+					if((mo.op1 != null && mo.op1.kind == Result.Kind.CONST) || !ent.getValue().destRegisters.contains(mo.op1.regNo)){
+						movestack.push(mo);
+						it.remove();
+						ent.getValue().destRegisters.remove(mo.op2.regNo);
+					}
+				}
+			}
+			while(!movestack.isEmpty()){
+				addMoveToBlock(movestack.pop(), ent.getKey());
 			}
 		}
 	}
 	
-	private void generateMoveInstruction(int destReg, int source, BasicBlock current, int branch, boolean constant){
+	private Instruction generateMoveInstruction(int destReg, int source, boolean constant){
 		Instruction instr = new Instruction();
 		instr.kind = Instruction.Kind.STD;
 		Result dest = new Result();
@@ -125,15 +197,14 @@ public class RegisterAllocation {
 		}
 		instr.op1 = s;
 		instr.op2 = dest;
-		instr.instructionNumber = Parser._lineNum;
 		instr.regNo = destReg;
-		if(branch == 1){
-			instr.thisBlock = current.leftParent;
-			current.leftParent.instructions.put(Parser._lineNum++, instr);
-		}else if(branch == 2){
-			instr.thisBlock = current.rightParent;
-			current.rightParent.instructions.put(Parser._lineNum++, instr);
-		}
+		return instr;
+	}
+	
+	private void addMoveToBlock(Instruction move, BasicBlock target){
+		move.instructionNumber = Parser._lineNum;
+		move.thisBlock = target;
+		target.instructions.put(Parser._lineNum++, move);
 	}
 	
 	private int colorNode(RIGNode node, Instruction instr, int color){
