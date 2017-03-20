@@ -11,6 +11,7 @@ public class RIG {
 	
 	public void addNode(Instruction instr, Set<Instruction> neighbors){
 		RIGNode node;
+		neighbors.remove(instr);
 		if(!_rig.containsKey(instr)){
 			node = new RIGNode(instr);
 			_rig.put(instr, node);
