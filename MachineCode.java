@@ -15,8 +15,9 @@ public class MachineCode {
     private static Set<String> arithmeticInstructions;
     private int dummyRegister = 25;
     private RegisterAllocation ra;
+    private CFG cfg;
     
-    public MachineCode(RegisterAllocation ra) {
+    public MachineCode(RegisterAllocation ra, CFG cfg) {
         // The + 1000 for the saving and restoring registers and variables etc
         f2code = new HashMap<String, Integer>();
         f1code = new HashMap<String, Integer>();
@@ -25,6 +26,7 @@ public class MachineCode {
         branchInstructions = new HashSet<String>();
         arithmeticInstructions = new HashSet<String>();
         this.ra = ra;
+        this.cfg = cfg;
         populateIR2Code();
         buf = new int[Instruction.allInstructions.size() + 1000];
         pc = 0;
@@ -82,7 +84,8 @@ public class MachineCode {
         arithmeticInstructions.add("MUL");
         arithmeticInstructions.add("DIV");
         arithmeticInstructions.add("CMP");
-
+        arithmeticInstructions.add("MOV");
+        
         branchInstructions.add("BRA");
         branchInstructions.add("BNE");
         branchInstructions.add("BEQ");
@@ -115,14 +118,28 @@ public class MachineCode {
      * - how to reference the frame pointer? is it what R30 points to?
      */
     public void generateCode() {
-        FinalInstructions fi = new FinalInstructions(ra);
+        FinalInstructions fi = new FinalInstructions(ra, cfg);
         Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);   
         
         for (Instruction instr : allInstructions.values()) {
             int a = 0; 
             int b = 0;
             int c = 0;
-            if (arithmeticInstructions.contains(instr.operation)) {
+            
+            if (instr.operation.equals("MOV")) {
+                if (instr.op1.kind == Result.Kind.CONST) {
+                    c = instr.op1.value;
+                } else if (instr.op1.kind == Result.Kind.REG) {
+                    b = instr.op1.regNo;
+                } else {
+                    System.out.println("Move operand is not constat or register");
+                }
+                
+                putF1(f1code.get("ADD"), instr.regNo, b, c);
+            } else if (arithmeticInstructions.contains(instr.operation)) {
+                
+                
+                
                 if (instr.op1.kind == Result.Kind.CONST && instr.op2.kind == Result.Kind.CONST) {
                     if (instr.operation.equals("ADD")) {
                         c = instr.op1.value + instr.op2.value;
@@ -141,7 +158,7 @@ public class MachineCode {
                         } else {
                             c = -1;
                         }
-                    }
+                    } 
                     
                     putF1(f1code.get("ADD"), instr.regNo, 0, c);
                 } else if (instr.op1.kind == Result.Kind.CONST || instr.op2.kind == Result.Kind.CONST) {
@@ -155,10 +172,15 @@ public class MachineCode {
                     //System.out.println("Instr reg is " + instr.regNo);
                     putF1(f1code.get(instr.operation), instr.regNo, b, c);
                 } else {
+                    putF2(f2code.get(instr.operation), instr.regNo, instr.op1.regNo, instr.op2.regNo);
                     
                 }
             } else if (branchInstructions.contains(instr.operation)) {
-                
+                if (instr.operation.equals("BRA")) {
+                    putF3(f3code.get(instr.operation), instr.op1.fixupLocation - instr.instructionNumber);
+                } else {
+                    putF1(f1code.get(instr.operation), instr.regNo, b, instr.op1.fixupLocation - instr.instructionNumber);
+                }
             } else if (instr.operation == "RET") {
                 c = instr.op1.value;
                 putF2(f2code.get(instr.operation), a, b, c);
@@ -188,14 +210,20 @@ public class MachineCode {
     }
     
     private void putF1(int op, int a, int b, int c) {
+        System.out.println("F1" + " " + op + " " + a + " " + b + " " + c);
+        
         buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0xFFFF;
     }
     
     private void putF2(int op, int a, int b, int c) {
+        System.out.println("F1" + " " +  op + " " + a + " " + b + " " + c);
+
         buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0x1F;
     }
     
     private void putF3(int op, int oper) {
+        System.out.println("F1" + " " + op + " " + oper);
+
         buf[pc++] = op << 26 | oper;
     }
 }
