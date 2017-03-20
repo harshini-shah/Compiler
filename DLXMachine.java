@@ -37,9 +37,16 @@ public class DLXMachine {
 
         execloop:
         while (true) {
+            
+            
             R[0] = 0;
             disassem(M[PC]); // initializes op, a, b, c
-
+            
+            System.out.println("op " + op + " a " + a + " b " + b + " c ");
+            System.out.println("R1 is :" + R[1]);
+            System.out.println("R2 is :" + R[2]);
+            System.out.println("R3 is :" + R[3]);
+            
             int nextPC = PC + 1;
             if (format==2) {
                 origc = c; // used for RET

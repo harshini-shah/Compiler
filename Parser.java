@@ -5,6 +5,7 @@
  * 3. For all the functions, the 'function (or CFG)' should also be passed as a parameter? 
  */
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -108,12 +109,14 @@ public class Parser {
             }
         }
         
-        for (CFG cfg : functionCFGs) {
-            System.out.println("CFG with " + cfg.bbs.size() + " BBs");
-            for (BasicBlock bb : cfg.bbs) {
-                System.out.println("Basic Block of type " + bb.kind);
-            }
-        }
+//        for (CFG cfg : functionCFGs) {
+//            System.out.println("CFG with " + cfg.bbs.size() + " BBs");
+//            for (BasicBlock bb : cfg.bbs) {
+//                System.out.println("Basic Block of type " + bb.kind);
+//            }
+//        }
+        
+        
         // Printing out the IR - only temporary
         for (CFG cfg : functionCFGs) {
 	        DominatorTree dt = new DominatorTree(cfg);
@@ -125,6 +128,18 @@ public class Parser {
 		    cs.performCSE(dt.root);
 		    RegisterAllocation ra = new RegisterAllocation();
 		    ra.allocate(cfg.startBlock);
+
+		    // printing the final instructions
+//		    FinalInstructions fi = new FinalInstructions(ra);
+//		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
+//		    for (int ii : finalInstructions.keySet()) {
+//		        System.out.println(ii + "\t" + finalInstructions.get(ii));
+////		        System.out.println(finalInstructions.get(ii).regNo);
+//		    }
+//		    
+//		    MachineCode mc = new MachineCode(ra);
+//		    mc.generateCode();
+		    
 //		    System.out.println(7);
 //		    VCGPrinter vp = new VCGPrinter();
 //		    vp.setOutputName("CFG" + fileIndex);
@@ -140,26 +155,31 @@ public class Parser {
 //		    vp.printRIG(ra.getRIG());
 		    
 		    // printing the final instructions
-		    FinalInstructions fi = new FinalInstructions(ra, cfg);
-		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
-		    for (int ii : finalInstructions.keySet()) {
-		        System.out.println(ii + "\t" + finalInstructions.get(ii));
-//		        System.out.println(finalInstructions.get(ii).regNo);
-		    }
+//		    FinalInstructions fi = new FinalInstructions(ra, cfg);
+//		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
+//		    for (int ii : finalInstructions.keySet()) {
+//		        System.out.println(ii + "\t" + finalInstructions.get(ii) + "\t" + "R" + finalInstructions.get(ii).regNo);
+////		        System.out.println(finalInstructions.get(ii).regNo);
+//		    }
 		    
-//		    MachineCode mc = new MachineCode(ra);
-//		    mc.generateCode();
+		    MachineCode mc = new MachineCode(ra, cfg);
+		    mc.generateCode();
 //		    
+
 //		    System.out.println(Integer.toBinaryString(mc.buf[0]));
 //            System.out.println(Integer.toBinaryString(mc.buf[1]));
 //            System.out.println(Integer.toBinaryString(mc.buf[2]));
 
 		    
-//		    DLXMachine dlx = new DLXMachine();
-//		    dlx.load(mc.buf);
-//		    dlx.execute();
-		    
-		    
+		    DLXMachine.load(mc.buf);
+		    try {
+                DLXMachine.execute();
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+//		    
+//		    
         }
     }
     
@@ -488,6 +508,7 @@ public class Parser {
         if(scanner.sym == Token.ifToken){
             Result follow = new Result();
             follow.fixupLocation = 0;
+            follow.kind = Result.Kind.CONDN;
             scanner.next();
             Result x = relation(currBlock);
             CondNegBraFwd(currBlock, x);
