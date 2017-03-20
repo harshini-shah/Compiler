@@ -208,6 +208,8 @@ public class RegisterAllocation {
 	}
 	
 	private int colorNode(RIGNode node, Instruction instr, int color){
+		if(node == null)
+			return -1;
 		Set<Integer> colorsN = new HashSet<Integer>();
 		for(RIGNode ne : node.get_neighbors()){
 			colorsN.add(ne.get_instr().regNo);

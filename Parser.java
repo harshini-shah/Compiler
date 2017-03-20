@@ -77,7 +77,7 @@ public class Parser {
                     varDecl(currBlock);
                 }
                 while (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
-                    funcDecl();
+                    funcDecl(currBlock);
                 }
                 currentCFG = 0;
                 if (scanner.sym == Token.beginToken) {
@@ -144,15 +144,15 @@ public class Parser {
 //		    System.out.println(7);
 		 
 		    VCGPrinter vp = new VCGPrinter();
-		    vp.setOutputName("DT" + fileIndex);
+		    vp.setOutputName("DT" + fileIndex + cfg.functionName);
 		    vp.init();
 		    vp.printDominatorTree(dt.root);
 		    
-		    vp.setOutputName("RIG" + fileIndex);
+		    vp.setOutputName("RIG" + fileIndex + cfg.functionName);
 		    vp.init();
 		    vp.printRIG(ra.getRIG());
 		    
-		    vp.setOutputName("CFG" + fileIndex);
+		    vp.setOutputName("CFG" + fileIndex + cfg.functionName);
 		    vp.init();
 		    vp.printCFG(cfg);
 		    
@@ -691,7 +691,9 @@ public class Parser {
                 
                 List<Integer> leftVersions = leftVariables.get(var);
                 List<Integer> rightVersions = rightVariables.get(var);
-                
+                if(leftVersions.size() == 0 || rightVersions.size() ==0){
+                	continue;
+                }
                 int left = leftVersions.get(leftVersions.size() - 1);
                 int right = rightVersions.get(rightVersions.size() - 1);
                 
@@ -1163,7 +1165,7 @@ public class Parser {
         return ident;
     }
     
-    private void funcDecl() {
+    private void funcDecl(BasicBlock block) {
         currentCFG++;
         if (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
             scanner.next();
@@ -1177,6 +1179,9 @@ public class Parser {
             // Setting the current block to be the start block of this function 
             BasicBlock currBlock = newFunction.startBlock;
             newFunction.bbs.add(currBlock);
+            for(Map.Entry<String, List<Integer>> entry : block.variables.entrySet()){
+                currBlock.variables.put(entry.getKey(), new ArrayList<Integer>(entry.getValue()));
+            }
 
             
             formalParam(currBlock, newFunction);
@@ -1234,7 +1239,7 @@ public class Parser {
                     dummy1.kind = Result.Kind.CONST;
                     dummy1.value = 0;
                     List<Integer> list1 = new ArrayList<Integer>();
-                    list.add(_lineNum);
+                    list1.add(_lineNum);
                     currBlock.variables.put(x1.name, list1);
                     Compute(currBlock, Token.becomesToken, dummy1, x1);
                 }
