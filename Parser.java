@@ -142,18 +142,19 @@ public class Parser {
 //		    mc.generateCode();
 		    
 //		    System.out.println(7);
-//		    VCGPrinter vp = new VCGPrinter();
-//		    vp.setOutputName("CFG" + fileIndex);
-//		    vp.init();
-//		    vp.printCFG(cfg);
-//		    
-//		    vp.setOutputName("DT" + fileIndex);
-//		    vp.init();
-//		    vp.printDominatorTree(dt.root);
-//		    
-//		    vp.setOutputName("RIG" + fileIndex);
-//		    vp.init();
-//		    vp.printRIG(ra.getRIG());
+		 
+		    VCGPrinter vp = new VCGPrinter();
+		    vp.setOutputName("DT" + fileIndex);
+		    vp.init();
+		    vp.printDominatorTree(dt.root);
+		    
+		    vp.setOutputName("RIG" + fileIndex);
+		    vp.init();
+		    vp.printRIG(ra.getRIG());
+		    
+		    vp.setOutputName("CFG" + fileIndex);
+		    vp.init();
+		    vp.printCFG(cfg);
 		    
 		    // printing the final instructions
 		    FinalInstructions fi = new FinalInstructions(ra, cfg);
@@ -163,8 +164,8 @@ public class Parser {
 //		        System.out.println(finalInstructions.get(ii).regNo);
 		    }
 		    
-		    MachineCode mc = new MachineCode(ra, cfg);
-		    mc.generateCode();
+//		    MachineCode mc = new MachineCode(ra, cfg);
+//		    mc.generateCode();
 //		    
 
 //		    System.out.println(Integer.toBinaryString(mc.buf[0]));
@@ -179,7 +180,7 @@ public class Parser {
 //                // TODO Auto-generated catch block
 //                e.printStackTrace();
 //            }
-//		    
+   
 		    
         }
     }
@@ -274,6 +275,10 @@ public class Parser {
             temp.kind = Result.Kind.INSTR;
             temp.version = _lineNum - 2;
             Compute(currBlock, Token.addaToken, x, temp);
+            String name = x.name;
+            generateAddressInstruction(currBlock, x, Token.plusToken);
+            Compute(currBlock, Token.addaToken, x, new Result(x.dimensions.get(0)));
+            x.name = name;
 //            if (x.dimensions.size() == 1) {
 //                Compute(currBlock, Token.timesToken, x.dimensions.get(0), dummy);
 //                generateAddressInstruction(currBlock, x, Token.plusToken);
@@ -306,6 +311,7 @@ public class Parser {
         instr.op2.kind = Result.Kind.VAR;
         instr.op2.name = x.name + "_BaseAddress";
         instr.thisBlock = currBlock;
+        instr.kind = Instruction.Kind.STD;
         Instruction.allInstructions.put(_lineNum, instr);
         currBlock.instructions.put(_lineNum++, instr);
         x.kind = Result.Kind.INSTR;
@@ -911,6 +917,7 @@ public class Parser {
     private void assignment(BasicBlock currBlock){
         if (scanner.sym == Token.letToken) {
             scanner.next();
+            
             Result x = designator(currBlock);
             if (scanner.sym == Token.becomesToken) {
                 scanner.next();
@@ -922,14 +929,15 @@ public class Parser {
                 
                 if (currBlock.variables.containsKey(x.name)) {
                     currBlock.variables.get(x.name).add(_lineNum);
-                } else {
-                    if (!currBlock.arrNames.contains(x.name)){
-                        List<Integer> lineNumbers = new ArrayList<Integer>();
-                        lineNumbers.add(_lineNum);
-                        currBlock.variables.put(x.name, lineNumbers);
-                    }
-                    
                 }
+//                } else {
+//                    if (!currBlock.arrNames.contains(x.name)){
+//                        List<Integer> lineNumbers = new ArrayList<Integer>();
+//                        lineNumbers.add(_lineNum);
+//                        currBlock.variables.put(x.name, lineNumbers);
+//                    }
+//                    
+//                }
                 Compute(currBlock, Token.becomesToken, y, x);
 
             } else {

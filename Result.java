@@ -37,6 +37,8 @@ public class Result{
         		returnValue += this.value;
         	else if(this.kind == Kind.INSTR)
         		returnValue += this.version;
+        	else if(this.kind == Kind.VAR)
+        		returnValue += this.name.hashCode();
         	return returnValue;
         }
         
@@ -49,6 +51,8 @@ public class Result{
         	if(this.kind == Kind.INSTR && this.kind == r.kind && this.version == r.version)
         		returnValue = true;
         	else if(this.kind == Kind.CONST && this.kind == r.kind && this.value == r.value)
+        		returnValue = true;
+        	else if(this.kind == Kind.VAR && this.kind == r.kind && this.name.equals(r.name))
         		returnValue = true;
         	return returnValue;
         }
