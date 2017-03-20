@@ -7,7 +7,7 @@ public class Test {
 //			System.out.println(s.sym);
 //		}
 //	    
-	    Parser parser = new Parser("Tests/test007.txt");
+	    Parser parser = new Parser("Tests/test008.txt");
 
 	}
 }
