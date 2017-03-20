@@ -15,8 +15,9 @@ public class MachineCode {
     private static Set<String> arithmeticInstructions;
     private int dummyRegister = 25;
     private RegisterAllocation ra;
+    private CFG cfg;
     
-    public MachineCode(RegisterAllocation ra) {
+    public MachineCode(RegisterAllocation ra, CFG cfg) {
         // The + 1000 for the saving and restoring registers and variables etc
         f2code = new HashMap<String, Integer>();
         f1code = new HashMap<String, Integer>();
@@ -25,6 +26,7 @@ public class MachineCode {
         branchInstructions = new HashSet<String>();
         arithmeticInstructions = new HashSet<String>();
         this.ra = ra;
+        this.cfg = cfg;
         populateIR2Code();
         buf = new int[Instruction.allInstructions.size() + 1000];
         pc = 0;
@@ -115,7 +117,7 @@ public class MachineCode {
      * - how to reference the frame pointer? is it what R30 points to?
      */
     public void generateCode() {
-        FinalInstructions fi = new FinalInstructions(ra);
+        FinalInstructions fi = new FinalInstructions(ra, cfg);
         Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);   
         
         for (Instruction instr : allInstructions.values()) {

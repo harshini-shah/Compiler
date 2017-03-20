@@ -12,7 +12,7 @@ public class Result{
         public List<Result> dimensions;
         
         public enum Kind{
-            CONST, VAR, CONDN, INSTR, ARR, REG
+            CONST, VAR, CONDN, INSTR, ARR, REG, FUNC
         }
         
         public Result() {  

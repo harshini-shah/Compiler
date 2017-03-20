@@ -24,13 +24,15 @@ public class FinalInstructions {
     private Map<Integer, Integer> old2new;
     private ArrayList<Integer> toBeChanged;
     private RegisterAllocation ra;
+    private CFG cfg;
     
-    public FinalInstructions(RegisterAllocation ra) {
+    public FinalInstructions(RegisterAllocation ra, CFG cfg) {
         instructionNumber = 1;
         finalInstructions = new HashMap<Integer, Instruction>();
         old2new = new HashMap<Integer, Integer>();
         toBeChanged = new ArrayList<Integer>();
         this.ra = ra;
+        this.cfg = cfg;
         getFinalInstructions();
         modifyInstructions();
     }
@@ -49,9 +51,7 @@ public class FinalInstructions {
     private void getFinalInstructions() {
         // Iterate over each block (from the list of blocks), and then over each instruction in that
         // block in order (check if the function is right)
-        
-        for (CFG cfg : Parser.functionCFGs) {
-            
+                    
             for (BasicBlock block : cfg.bbs) {
                 ArrayList<Instruction> instructions = (ArrayList<Instruction>) block.getOrderedInstructions();
                 for (Instruction instr : instructions) {
@@ -134,7 +134,13 @@ public class FinalInstructions {
                                 finalInstructions.put(instructionNumber++, instr);
                                 break;
                             default:
-                                System.out.println("ERROR: Instruction is of type func but doesn't match any predefined function");
+                                instr.op2 = null;
+                                instr.op3 = null;
+                                old2new.put(instr.instructionNumber, instructionNumber);
+                                instr.instructionNumber = instructionNumber;
+                                finalInstructions.put(instructionNumber++, instr);
+                                break;
+
                         }
                         
                     } else if (instr.kind == Instruction.Kind.STD) {
@@ -163,12 +169,13 @@ public class FinalInstructions {
                             break;
                         case "RET":
                         case "CALL":
+                            finalInstructions.put(instructionNumber++, instr);
+                            break;
                         case "ADDA":
                         default:
                             System.out.println("ERROR : The instruction operation is not any standard instr " + instr.operation);
                         }
                     }
-                }
                 
             }
         }

@@ -78,6 +78,7 @@ public class Parser {
                 while (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
                     funcDecl();
                 }
+                currentCFG = 0;
                 if (scanner.sym == Token.beginToken) {
                     scanner.next();
                     BasicBlock finalBlock = statSequence(currBlock, null);
@@ -107,6 +108,12 @@ public class Parser {
             }
         }
         
+        for (CFG cfg : functionCFGs) {
+            System.out.println("CFG with " + cfg.bbs.size() + " BBs");
+            for (BasicBlock bb : cfg.bbs) {
+                System.out.println("Basic Block of type " + bb.kind);
+            }
+        }
         // Printing out the IR - only temporary
         for (CFG cfg : functionCFGs) {
 	        DominatorTree dt = new DominatorTree(cfg);
@@ -118,33 +125,31 @@ public class Parser {
 		    cs.performCSE(dt.root);
 		    RegisterAllocation ra = new RegisterAllocation();
 		    ra.allocate(cfg.startBlock);
-		    
-		    
-		    VCGPrinter vp = new VCGPrinter();
-		    
-		    
-		    vp.setOutputName("DT" + fileIndex);
-		    vp.init();
-		    vp.printDominatorTree(dt.root);
-		    
-		    vp.setOutputName("RIG" + fileIndex);
-		    vp.init();
-		    vp.printRIG(ra.getRIG());
-		    
-		    vp.setOutputName("CFG" + fileIndex);
-		    vp.init();
-		    vp.printCFG(cfg);
-		    // printing the final instructions
-//		    FinalInstructions fi = new FinalInstructions(ra);
-//		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
-//		    for (int ii : finalInstructions.keySet()) {
-//		        System.out.println(ii + "\t" + finalInstructions.get(ii));
-////		        System.out.println(finalInstructions.get(ii).regNo);
-//		    }
+//		    System.out.println(7);
+//		    VCGPrinter vp = new VCGPrinter();
+//		    vp.setOutputName("CFG" + fileIndex);
+//		    vp.init();
+//		    vp.printCFG(cfg);
 //		    
+//		    vp.setOutputName("DT" + fileIndex);
+//		    vp.init();
+//		    vp.printDominatorTree(dt.root);
+//		    
+//		    vp.setOutputName("RIG" + fileIndex);
+//		    vp.init();
+//		    vp.printRIG(ra.getRIG());
+		    
+		    // printing the final instructions
+		    FinalInstructions fi = new FinalInstructions(ra, cfg);
+		    TreeMap<Integer, Instruction> finalInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);
+		    for (int ii : finalInstructions.keySet()) {
+		        System.out.println(ii + "\t" + finalInstructions.get(ii));
+//		        System.out.println(finalInstructions.get(ii).regNo);
+		    }
+		    
 //		    MachineCode mc = new MachineCode(ra);
 //		    mc.generateCode();
-		    
+//		    
 //		    System.out.println(Integer.toBinaryString(mc.buf[0]));
 //            System.out.println(Integer.toBinaryString(mc.buf[1]));
 //            System.out.println(Integer.toBinaryString(mc.buf[2]));
@@ -635,11 +640,11 @@ public class Parser {
             System.out.println(str);
         }
         for (String var : leftVariables.keySet()) {
-            System.out.println("variable before checking " + var);
+//            System.out.println("variable before checking " + var);
             if (leftBlock.arrNames.contains(var) || var == null) {
                 continue;
             }
-            System.out.println("after checking " + var);
+//            System.out.println("after checking " + var);
             if (rightVariables.containsKey(var)) {
                 
                 List<Integer> leftVersions = leftVariables.get(var);
@@ -649,7 +654,7 @@ public class Parser {
                 int right = rightVersions.get(rightVersions.size() - 1);
                 
                 if (left != right) {
-                    System.out.println("PHI Generated for " + var);
+//                    System.out.println("PHI Generated for " + var);
 
                     Instruction instr = new Instruction();
                     instr.kind = Instruction.Kind.PHI;
@@ -933,26 +938,53 @@ public class Parser {
     
     private Result funcCall(BasicBlock currBlock){
         Result res = new Result();
+        Instruction instr = new Instruction();
+        instr.kind = Instruction.Kind.FUNC;
+        instr.thisBlock = currBlock;
+        Instruction.allInstructions.put(_lineNum, instr);
+        instr.instructionNumber = _lineNum;
         if (scanner.sym == Token.callToken) {
             scanner.next();
             Result x = ident();
+            x.kind = Result.Kind.FUNC;
+            instr.operation = x.name;
+            instr.op1 = x;
+            instr.instructionNumber = _lineNum;
             if (scanner.sym == Token.openparanToken) {
                 scanner.next();
+                
+                if (scanner.sym == Token.closeparanToken) {
+                    Instruction.allInstructions.put(_lineNum, instr);
+                    System.out.println();
+                    currBlock.instructions.put(_lineNum++, instr);
+                    return x;
+                }
+                
                 Result y = expression(currBlock);
+                
                 if (isPredefinedFunction(x)) {
                     res = generateFunctionCall(currBlock, x, y);
                 }
                 while (scanner.sym == Token.commaToken) {
                     scanner.next();
-                    expression(currBlock);
+                    x.dimensions.add(y);
+                    y = expression(currBlock);
                 }
                 if (scanner.sym == Token.closeparanToken) {
+                    x.dimensions.add(y);
+                    Instruction.allInstructions.put(_lineNum, instr);
+
+                    currBlock.instructions.put(_lineNum++, instr);
                     scanner.next();
+                    return x;
                 } else {
                     error("function call missing closing paran");
                 }
             } else {
-                error("function call missing open paran");
+                Instruction.allInstructions.put(_lineNum, instr);
+                System.out.println();
+                currBlock.instructions.put(_lineNum++, instr);
+                return x;
             }
         } else {
             error("Error in funcCall");
@@ -1079,6 +1111,7 @@ public class Parser {
     }
     
     private void funcDecl() {
+        currentCFG++;
         if (scanner.sym == Token.funcToken || scanner.sym == Token.procToken) {
             scanner.next();
             Result func = ident();
@@ -1088,10 +1121,10 @@ public class Parser {
             newFunction.functionName = func.name;
             newFunction.startBlock = new BasicBlock(blockNum++);
             functionCFGs.add(newFunction);
-            
             // Setting the current block to be the start block of this function 
             BasicBlock currBlock = newFunction.startBlock;
-            
+            newFunction.bbs.add(currBlock);
+
             
             formalParam(currBlock, newFunction);
             
