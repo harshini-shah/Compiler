@@ -120,7 +120,7 @@ public class MachineCode {
     public void generateCode() {
         FinalInstructions fi = new FinalInstructions(ra, cfg);
         Map<Integer, Instruction> allInstructions = new TreeMap<Integer, Instruction>(fi.finalInstructions);   
-        
+        boolean negate = false;
         for (Instruction instr : allInstructions.values()) {
             int a = 0; 
             int b = 0;
@@ -162,23 +162,52 @@ public class MachineCode {
                     
                     putF1(f1code.get("ADD"), instr.regNo, 0, c);
                 } else if (instr.op1.kind == Result.Kind.CONST || instr.op2.kind == Result.Kind.CONST) {
+                    System.out.println("HIIIIIIIIIIII");
                     if (instr.op1.kind == Result.Kind.CONST) {
                         c = instr.op1.value;
                         b = instr.op2.regNo; 
+                        negate = true;
+                        putF1(f1code.get(instr.operation), instr.regNo, b, c);
+
                     } else {
                         c = instr.op2.value;
                         b = instr.op1.regNo; 
+                        
+                        putF1(f1code.get(instr.operation), instr.regNo, b, c);
+
                     }
                     //System.out.println("Instr reg is " + instr.regNo);
-                    putF1(f1code.get(instr.operation), instr.regNo, b, c);
                 } else {
                     putF2(f2code.get(instr.operation), instr.regNo, instr.op1.regNo, instr.op2.regNo);
                     
                 }
             } else if (branchInstructions.contains(instr.operation)) {
                 if (instr.operation.equals("BRA")) {
-                    putF3(f3code.get(instr.operation), instr.op1.fixupLocation - instr.instructionNumber);
+                    putF3(f3code.get(instr.operation), instr.op1.fixupLocation * 4);
+                    negate = false;
                 } else {
+                    if (negate) {
+                        if (instr.operation.equals("BGE")) {
+                            instr.operation = "BLT";
+                        } else if (instr.operation.equals("BLT")) {
+                            instr.operation = "BGE";
+                        } else if (instr.operation.equals("BEQ")) {
+                            instr.operation = "BNE";
+                        } else if (instr.operation.equals("BNE")) {
+                            instr.operation = "BEQ";
+                        } else if (instr.operation.equals("BGT")) {
+                            instr.operation = "BLE";
+                        } else if (instr.operation.equals("BLE")) {
+                            instr.operation = "BGT";
+                        } 
+                        negate = false;
+                    }
+//                    int offset = 0;
+//                    if (instr.op1.fixupLocation > instr.instructionNumber) {
+//                        offset = instr.op1.fixupLocation - instr.instructionNumber;
+//                    } else {
+//                        offset = -(instruction.instr.op1.fixupLocation;
+//                    }
                     putF1(f1code.get(instr.operation), instr.regNo, b, instr.op1.fixupLocation - instr.instructionNumber);
                 }
             } else if (instr.operation == "RET") {
@@ -216,13 +245,13 @@ public class MachineCode {
     }
     
     private void putF2(int op, int a, int b, int c) {
-        System.out.println("F1" + " " +  op + " " + a + " " + b + " " + c);
+        System.out.println("F2" + " " +  op + " " + a + " " + b + " " + c);
 
         buf[pc++] = op << 26 | a << 21 | b << 16 | c & 0x1F;
     }
     
     private void putF3(int op, int oper) {
-        System.out.println("F1" + " " + op + " " + oper);
+        System.out.println("F3" + " " + op + " " + oper);
 
         buf[pc++] = op << 26 | oper;
     }

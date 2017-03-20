@@ -40,12 +40,13 @@ public class DLXMachine {
             
             
             R[0] = 0;
+            
             disassem(M[PC]); // initializes op, a, b, c
             
-            System.out.println("op " + op + " a " + a + " b " + b + " c ");
-            System.out.println("R1 is :" + R[1]);
-            System.out.println("R2 is :" + R[2]);
-            System.out.println("R3 is :" + R[3]);
+            System.out.println("op " + op + " a " + a + " b " + b + " c " + c);
+//            System.out.println("R1 is :" + R[1]);
+//            System.out.println("R2 is :" + R[2]);
+//            System.out.println("R3 is :" + R[3]);
             
             int nextPC = PC + 1;
             if (format==2) {
@@ -200,7 +201,9 @@ public class DLXMachine {
                     break;
                 case JSR:
                     R[31] = (PC+1) * 4;
+                    
                     nextPC = c / 4;
+//                    System.out.println("next pc is " + nextPC);
                     break;
                 case RET: 
                     if (origc == 0) break execloop; // remember: c==R[origc]
