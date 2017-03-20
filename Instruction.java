@@ -111,7 +111,7 @@ public class Instruction {
     }
     
     public boolean isCommutativeExpression(){
-    	return this.operation.equals("ADD") || this.operation.equals("MUL");
+    	return this.operation.equals("ADD") || this.operation.equals("MUL") || this.operation.equals("ADDA");
     }
     
     public boolean isAssignmentInstruction(){
